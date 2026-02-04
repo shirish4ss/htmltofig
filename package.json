@@ -18,7 +18,7 @@
     "generate-config": "node scripts/generate-mcp-config.js"
   },
   "devDependencies": {
-    "@figma/plugin-typings": "^1.65.0",
+    "@figma/plugin-typings": "^1.123.0",
     "esbuild": "^0.27.2",
     "typescript": "^5.0.0"
   },
