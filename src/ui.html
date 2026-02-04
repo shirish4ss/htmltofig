@@ -1,21 +1,23 @@
 <html>
 <head>
-  <title>HTML to Figma</title>
+  <title>HTML to Figma Pro</title>
   <style>
     :root {
-      --primary: #9747FF;
-      --primary-gradient: linear-gradient(135deg, #9747FF 0%, #7029E6 100%);
-      --primary-hover: #8232FF;
-      --bg: #F8F9FE;
-      --surface: #FFFFFF;
-      --text: #1A1A1A;
-      --text-secondary: #6B7280;
-      --border: #F3F4F6;
+      --primary: #9333EA;
+      --primary-hover: #A855F7;
+      --primary-gradient: linear-gradient(135deg, #9333EA 0%, #4F46E5 100%);
+      --bg: #0F172A;
+      --surface: rgba(30, 41, 59, 0.7);
+      --surface-solid: #1E293B;
+      --text: #F8FAFC;
+      --text-secondary: #94A3B8;
+      --border: rgba(255, 255, 255, 0.1);
       --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-      --radius-lg: 16px;
-      --radius-md: 12px;
-      --radius-sm: 8px;
+      --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+      --radius-lg: 20px;
+      --radius-md: 14px;
+      --radius-sm: 10px;
+      --accent: #F43F5E;
     }
 
     * {
@@ -26,78 +28,179 @@
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(8px); }
+      from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(147, 51, 234, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(147, 51, 234, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(147, 51, 234, 0); }
+    }
+
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: linear-gradient(180deg, #F8F9FE 0%, #FFFFFF 100%);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      background-image:
+        radial-gradient(at 0% 0%, rgba(147, 51, 234, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(79, 70, 229, 0.15) 0px, transparent 50%);
       color: var(--text);
-      padding: 20px;
-      line-height: 1.5;
-      min-height: auto;
+      padding: 0;
+      line-height: 1.6;
+      min-height: 700px;
       display: flex;
       flex-direction: column;
       overflow-x: hidden;
     }
 
-    .plugin-content {
-      animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    .app-wrapper {
+      display: flex;
+      flex-direction: column;
+      height: 700px;
+      animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    .header {
-      text-align: left;
-      margin-bottom: 20px;
+    .header-nav {
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
 
-    .subtitle {
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--primary-gradient);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 4px 10px rgba(147, 51, 234, 0.3);
+    }
+
+    .logo-text {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to bottom, #fff, #94A3B8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .social-link {
+      color: var(--text-secondary);
+      transition: color 0.2s;
+      display: flex;
+    }
+
+    .social-link:hover {
+      color: var(--text);
+    }
+
+    .coffee-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .coffee-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .content-area {
+      flex: 1;
+      padding: 24px 20px;
+      overflow-y: auto;
+    }
+
+    .hero-section {
+      margin-bottom: 28px;
+    }
+
+    .hero-title {
+      font-size: 24px;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 8px;
+      letter-spacing: -0.03em;
+    }
+
+    .hero-subtitle {
       font-size: 14px;
       color: var(--text-secondary);
-      font-weight: 450;
     }
 
     /* Tab Styles */
     .tab-container {
       display: flex;
-      gap: 6px;
-      margin-bottom: 20px;
-      background: rgba(0, 0, 0, 0.04);
+      gap: 4px;
+      margin-bottom: 24px;
+      background: rgba(255, 255, 255, 0.05);
       padding: 4px;
       border-radius: var(--radius-md);
-      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
     }
 
     .tab {
       flex: 1;
-      padding: 8px 12px;
+      padding: 10px 12px;
       background: transparent;
       border: none;
-      border-radius: var(--radius-sm);
+      border-radius: 10px;
       cursor: pointer;
       font-size: 13px;
       font-weight: 600;
       color: var(--text-secondary);
-      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       text-align: center;
-      white-space: nowrap;
     }
 
     .tab.active {
-      background: var(--surface);
-      color: var(--primary);
-      box-shadow: var(--shadow-sm);
+      background: var(--primary-gradient);
+      color: white;
+      box-shadow: 0 4px 12px rgba(147, 51, 234, 0.25);
     }
 
     .tab:hover:not(.active) {
       color: var(--text);
-      background: rgba(255, 255, 255, 0.5);
+      background: rgba(255, 255, 255, 0.08);
     }
 
     /* Tab Content */
     .tab-content {
       display: none;
-      animation: fadeIn 0.3s ease-out;
+      animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .tab-content.active {
@@ -112,16 +215,36 @@
       text-align: left;
     }
 
+    .modern-card {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      padding: 20px;
+      box-shadow: var(--shadow-md);
+      transition: transform 0.2s, border-color 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .modern-card:hover {
+      border-color: rgba(147, 51, 234, 0.3);
+    }
+
     .switch-container {
       display: flex;
       align-items: center;
       justify-content: space-between;
       margin-bottom: 16px;
-      padding: 16px;
-      background: var(--surface);
+      padding: 18px;
+      background: rgba(255, 255, 255, 0.03);
       border-radius: var(--radius-md);
-      box-shadow: var(--shadow-sm);
       border: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+
+    .switch-container:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.2);
     }
 
     .switch-label {
@@ -195,24 +318,24 @@
       width: 100%;
       flex: 1;
       min-height: 140px;
-      padding: 14px;
-      background: var(--surface);
+      padding: 16px;
+      background: rgba(15, 23, 42, 0.5);
       border: 1px solid var(--border);
       border-radius: var(--radius-md);
       font-size: 13px;
-      font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', monospace;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
       color: var(--text);
       resize: none;
       outline: none;
-      transition: all 0.2s ease;
+      transition: all 0.3s ease;
       overflow-y: auto;
-      margin-bottom: 8px;
-      box-shadow: var(--shadow-sm);
+      margin-bottom: 12px;
     }
 
     .textarea:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(151, 71, 255, 0.1);
+      background: rgba(15, 23, 42, 0.8);
+      box-shadow: 0 0 0 4px rgba(147, 51, 234, 0.15);
     }
 
     .textarea::placeholder {
@@ -563,6 +686,34 @@
       background: #FDFCFE;
     }
 
+    .viewport-btn {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .viewport-btn:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .viewport-btn.active {
+      background: rgba(147, 51, 234, 0.1);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
     .button.tertiary {
       background: transparent;
       color: #6c757d;
@@ -664,28 +815,60 @@
   </style>
 </head>
 <body>
-  <!-- Minimized state bar (hidden by default) -->
-  <div class="minimized-bar">
-    <span class="status-dot" id="minimized-status-dot"></span>
-    <span class="status-text" id="minimized-status-text">Disconnected</span>
-    <button class="minimize-btn minimized-expand-btn" id="minimized-expand-btn" title="Expand">⌃</button>
-  </div>
+  <div class="app-wrapper" id="app-wrapper">
+    <!-- Header Navigation -->
+    <header class="header-nav">
+      <div class="logo-area">
+        <div class="logo-icon">H</div>
+        <div class="logo-text">FIGMA.IO</div>
+      </div>
+      <div class="header-actions">
+        <a href="https://github.com/Floristeady/html-to-figma" target="_blank" class="social-link" title="GitHub">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+        </a>
+        <button class="coffee-btn" onclick="window.open('https://www.buymeacoffee.com', '_blank')">
+          <span>☕</span>
+          <span>Support</span>
+        </button>
+        <button class="social-link" style="background: transparent; border: none; cursor: pointer; padding: 4px;" id="minimize-header-btn" title="Minimize">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path></svg>
+        </button>
+      </div>
+    </header>
 
-  <!-- Main Content -->
-  <div class="plugin-content" id="plugin-content">
-    <div class="header">
-      <h1 style="font-size: 20px; font-weight: 800; background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 4px;">HTML to Figma</h1>
-      <p class="subtitle">Convert web designs in seconds</p>
-    </div>
+    <div class="content-area" id="plugin-content">
+      <div class="hero-section">
+        <h1 class="hero-title">HTML to <span style="background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Figma</span></h1>
+        <p class="hero-subtitle">The ultimate design bridge for modern workflows.</p>
+      </div>
 
-    <!-- Tabs -->
-    <div class="tab-container">
-    <button class="tab active" data-tab="mcp">MCP Bridge</button>
-    <button class="tab" data-tab="paste">Paste HTML</button>
-    <button class="tab" data-tab="upload">Upload / URL</button>
-  </div>
+      <!-- Tabs -->
+      <nav class="tab-container">
+        <button class="tab active" data-tab="mcp">MCP Bridge</button>
+        <button class="tab" data-tab="paste">Paste HTML</button>
+        <button class="tab" data-tab="upload">Upload / URL</button>
+      </nav>
 
-  <!-- MCP Bridge Tab Content -->
+      <!-- Viewport Selector -->
+      <div style="margin-bottom: 24px;">
+        <label class="switch-label" style="display: block; margin-bottom: 12px; font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Target Viewport</label>
+        <div style="display: flex; gap: 8px;">
+          <button class="viewport-btn active" data-width="1440">
+            <span style="font-size: 16px;">💻</span>
+            <span>Desktop</span>
+          </button>
+          <button class="viewport-btn" data-width="768">
+            <span style="font-size: 16px;">📱</span>
+            <span>Tablet</span>
+          </button>
+          <button class="viewport-btn" data-width="375">
+            <span style="font-size: 16px;">🤳</span>
+            <span>Mobile</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- MCP Bridge Tab Content -->
   <div class="tab-content active" id="mcp-tab">
     <div class="mcp-description">
       Sync with AI assistants via the Model Context Protocol to design in real-time.
@@ -827,7 +1010,34 @@
     </button>
   </div>
 
+  <!-- Recent Imports Section -->
+  <div style="margin-top: 32px; border-top: 1px solid var(--border); padding-top: 24px;">
+    <h3 style="font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+      <span>🕒</span> Recent Imports
+    </h3>
+    <div id="recent-list" style="display: flex; flex-direction: column; gap: 10px;">
+      <div class="status-detail" style="font-style: italic;">No recent imports yet</div>
+    </div>
+  </div>
+
   </div><!-- End plugin-content -->
+
+  <!-- Footer -->
+  <footer style="padding: 20px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; color: var(--text-secondary); font-size: 11px;">
+    <div>v3.1.0 • 2026 Edition</div>
+    <div style="display: flex; gap: 12px;">
+      <a href="#" style="color: inherit; text-decoration: none;">Help</a>
+      <a href="#" style="color: inherit; text-decoration: none;">Feedback</a>
+    </div>
+  </footer>
+
+  <!-- Minimized bar -->
+  <div class="minimized-bar">
+    <span class="status-dot" id="minimized-status-dot"></span>
+    <span class="status-text" id="minimized-status-text">Disconnected</span>
+    <button class="minimize-btn" id="minimized-expand-btn">⌃</button>
+  </div>
+</div><!-- End app-wrapper -->
 
 <script>
 // Global variable to control detailed logging
@@ -1055,6 +1265,17 @@ var SUPPORTED_CONTENT = {
   '"🏟️"': '🏟️', '"📍"': '📍', '"🏢"': '🏢', '""': ''
 };
 
+// Viewport selector logic
+var selectedViewportWidth = 1440;
+document.querySelectorAll('.viewport-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.viewport-btn').forEach(function(b) { b.classList.remove('active'); });
+    this.classList.add('active');
+    selectedViewportWidth = parseInt(this.getAttribute('data-width'), 10);
+    debugLog('[UI] Viewport changed to:', selectedViewportWidth);
+  });
+});
+
 // Tab functionality
 document.querySelectorAll('.tab').forEach(function(tab) {
   tab.addEventListener('click', function() {
@@ -1156,12 +1377,9 @@ function updateMinimizedStatus() {
 
 function toggleMinimize() {
   isMinimized = !isMinimized;
-  var btn = document.getElementById('minimize-btn');
 
   if (isMinimized) {
     document.body.classList.add('minimized');
-    btn.textContent = '⌄';
-    btn.title = 'Expand';
     updateMinimizedStatus();
     // Send message to resize plugin window
     parent.postMessage({
@@ -1172,8 +1390,6 @@ function toggleMinimize() {
     }, '*');
   } else {
     document.body.classList.remove('minimized');
-    btn.textContent = '⌃';
-    btn.title = 'Minimize';
     // Send message to restore plugin window
     parent.postMessage({
       pluginMessage: {
@@ -1184,7 +1400,8 @@ function toggleMinimize() {
   }
 }
 
-document.getElementById('minimize-btn').addEventListener('click', toggleMinimize);
+var minBtn = document.getElementById('minimize-header-btn');
+if (minBtn) minBtn.addEventListener('click', toggleMinimize);
 document.getElementById('minimized-expand-btn').addEventListener('click', toggleMinimize);
 
 // Helper functions for new UI elements
@@ -2085,6 +2302,49 @@ function simpleParseHTML(htmlStr) {
   return result;
 }
 
+// Recent Imports Logic
+function updateRecentList(history) {
+  var list = document.getElementById('recent-list');
+  if (!list) return;
+
+  if (!history || history.length === 0) {
+    list.innerHTML = '<div class="status-detail" style="font-style: italic;">No recent imports yet</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  history.forEach(function(item) {
+    var entry = document.createElement('div');
+    entry.className = 'modern-card';
+    entry.style.padding = '12px 16px';
+    entry.style.display = 'flex';
+    entry.style.justifyContent = 'space-between';
+    entry.style.alignItems = 'center';
+    entry.style.marginBottom = '0';
+    entry.style.background = 'rgba(255,255,255,0.03)';
+
+    var info = document.createElement('div');
+    info.style.display = 'flex';
+    info.style.flexDirection = 'column';
+
+    var name = document.createElement('span');
+    name.textContent = item.name;
+    name.style.fontSize = '13px';
+    name.style.fontWeight = '600';
+
+    var meta = document.createElement('span');
+    meta.textContent = item.type + ' • ' + new Date(item.timestamp).toLocaleTimeString();
+    meta.style.fontSize = '10px';
+    meta.style.color = 'var(--text-secondary)';
+
+    info.appendChild(name);
+    info.appendChild(meta);
+    entry.appendChild(info);
+
+    list.appendChild(entry);
+  });
+}
+
 // Convert to Figma button functionality
 document.getElementById('send-btn').onclick = async function() {
   var htmlValue = document.getElementById('html-input').value;
@@ -2102,7 +2362,7 @@ document.getElementById('send-btn').onclick = async function() {
     // Fetch images before sending to plugin
     await collectAndFetchImages(structure);
 
-    var detectedWidth = detectDesignWidthFromHTML(htmlValue);
+    var detectedWidth = selectedViewportWidth || detectDesignWidthFromHTML(htmlValue);
     var detectedRemBase = detectRootFontSize(htmlValue);
 
     parent.postMessage({
@@ -2328,7 +2588,7 @@ document.getElementById('upload-convert-btn').onclick = async function() {
     // Fetch images before sending to plugin
     await collectAndFetchImages(structure);
 
-    var detectedWidth = detectDesignWidthFromHTML(uploadedHtmlContent);
+    var detectedWidth = selectedViewportWidth || detectDesignWidthFromHTML(uploadedHtmlContent);
     var detectedRemBase = detectRootFontSize(uploadedHtmlContent);
 
     parent.postMessage({
@@ -2353,24 +2613,39 @@ async function collectAndFetchImages(structure) {
   async function traverse(nodes) {
     for (var i = 0; i < nodes.length; i++) {
       var node = nodes[i];
+
+      // Handle <img> tags
       if (node.tagName === 'img' && node.attributes && node.attributes.src) {
         var src = node.attributes.src;
-        // Skip data URLs as they don't need fetching (though they could be large)
-        if (src.startsWith('http')) {
+        if (src && (src.startsWith('http') || src.startsWith('data:'))) {
           try {
-            debugLog('[IMAGE] Fetching:', src);
             var response = await fetch(src);
             if (response.ok) {
               var buffer = await response.arrayBuffer();
-              // Store as regular array for safer postMessage transfer across all environments
               node.imageData = Array.from(new Uint8Array(buffer));
-              debugLog('[IMAGE] Fetched successfully:', src);
             }
-          } catch (e) {
-            console.error('Failed to fetch image:', src, e);
+          } catch (e) { console.error('Failed to fetch img:', src, e); }
+        }
+      }
+
+      // Handle background-image
+      var bgImg = node.styles && (node.styles['background-image'] || node.styles['background']);
+      if (bgImg && typeof bgImg === 'string' && bgImg.includes('url(')) {
+        var urlMatch = bgImg.match(/url\(['"]?([^'"]+)['"]?\)/);
+        if (urlMatch) {
+          var bgUrl = urlMatch[1];
+          if (bgUrl.startsWith('http') || bgUrl.startsWith('data:')) {
+            try {
+              var response = await fetch(bgUrl);
+              if (response.ok) {
+                var buffer = await response.arrayBuffer();
+                node.backgroundImageData = Array.from(new Uint8Array(buffer));
+              }
+            } catch (e) { console.error('Failed to fetch bg-img:', bgUrl, e); }
           }
         }
       }
+
       if (node.children && node.children.length > 0) {
         await traverse(node.children);
       }
@@ -2572,7 +2847,7 @@ function handleSSEMCPRequest(data) {
       debugLog('[SSE] HTML parsed, structure length:', structure?.length || 0);
 
       // Detect design width from meta tags and CSS
-      var detectedWidth = detectDesignWidthFromHTML(htmlContent);
+      var detectedWidth = selectedViewportWidth || detectDesignWidthFromHTML(htmlContent);
       var detectedRemBase = detectRootFontSize(htmlContent);
       debugLog('[SSE] Detected design width:', detectedWidth, 'rem base:', detectedRemBase);
 
@@ -2630,9 +2905,14 @@ window.addEventListener('message', function(event) {
       updateMCPStatus('MCP Inactive', 'disconnected');
     } else if (msg.type === 'test-broadcast-complete') {
       updateConnectionDetails('Connection test completed');
+    } else if (msg.type === 'history-updated') {
+      updateRecentList(msg.history);
     }
   }
 });
+
+// Initial load
+parent.postMessage({ pluginMessage: { type: 'load-history' } }, '*');
 
 </script>
 </body>
