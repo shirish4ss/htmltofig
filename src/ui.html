@@ -2,69 +2,102 @@
 <head>
   <title>HTML to Figma</title>
   <style>
+    :root {
+      --primary: #9747FF;
+      --primary-gradient: linear-gradient(135deg, #9747FF 0%, #7029E6 100%);
+      --primary-hover: #8232FF;
+      --bg: #F8F9FE;
+      --surface: #FFFFFF;
+      --text: #1A1A1A;
+      --text-secondary: #6B7280;
+      --border: #F3F4F6;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      --radius-lg: 16px;
+      --radius-md: 12px;
+      --radius-sm: 8px;
+    }
+
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #FFFFFF;
-      color: #1A1A1A;
-      padding: 16px;
-      line-height: 1.4;
+      background: linear-gradient(180deg, #F8F9FE 0%, #FFFFFF 100%);
+      color: var(--text);
+      padding: 20px;
+      line-height: 1.5;
       min-height: auto;
       display: flex;
       flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    .plugin-content {
+      animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .header {
       text-align: left;
-      margin-bottom: 12px;
+      margin-bottom: 20px;
     }
 
     .subtitle {
       font-size: 14px;
-      color: #1A1A1A;
-      opacity: 0.7;
+      color: var(--text-secondary);
+      font-weight: 450;
     }
 
     /* Tab Styles */
     .tab-container {
       display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
+      gap: 6px;
+      margin-bottom: 20px;
+      background: rgba(0, 0, 0, 0.04);
+      padding: 4px;
+      border-radius: var(--radius-md);
+      backdrop-filter: blur(8px);
     }
 
     .tab {
       flex: 1;
-      padding: 10px 16px;
-      background: #F8F8F8;
-      border: 2px solid #E6E6E6;
-      border-radius: 6px;
+      padding: 8px 12px;
+      background: transparent;
+      border: none;
+      border-radius: var(--radius-sm);
       cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
-      color: #1A1A1A;
-      opacity: 0.7;
-      transition: all 0.2s ease;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
       text-align: center;
+      white-space: nowrap;
     }
 
     .tab.active {
-      background: #FFFFFF;
-      border-color: #9747FF;
-      opacity: 1;
+      background: var(--surface);
+      color: var(--primary);
+      box-shadow: var(--shadow-sm);
     }
 
-    .tab:hover {
-      opacity: 0.9;
+    .tab:hover:not(.active) {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.5);
     }
 
     /* Tab Content */
     .tab-content {
       display: none;
+      animation: fadeIn 0.3s ease-out;
     }
 
     .tab-content.active {
@@ -74,9 +107,8 @@
     /* MCP Tab Styles */
     .mcp-description {
       font-size: 14px;
-      color: #1A1A1A;
-      opacity: 0.7;
-      margin-bottom: 20px;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
       text-align: left;
     }
 
@@ -84,23 +116,25 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 12px;
-      padding: 12px;
-      background: #F8F8F8;
-      border-radius: 6px;
+      margin-bottom: 16px;
+      padding: 16px;
+      background: var(--surface);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border);
     }
 
     .switch-label {
       font-size: 14px;
-      font-weight: 500;
-      color: #1A1A1A;
+      font-weight: 600;
+      color: var(--text);
     }
 
     /* Toggle Switch */
     .switch {
       position: relative;
       display: inline-block;
-      width: 48px;
+      width: 44px;
       height: 24px;
     }
 
@@ -117,8 +151,8 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background-color: #ccc;
-      transition: 0.3s;
+      background-color: #E5E7EB;
+      transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       border-radius: 24px;
     }
 
@@ -130,16 +164,17 @@
       left: 3px;
       bottom: 3px;
       background-color: white;
-      transition: 0.3s;
+      transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       border-radius: 50%;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     }
 
     input:checked + .slider {
-      background-color: #9747FF;
+      background: var(--primary-gradient);
     }
 
     input:checked + .slider:before {
-      transform: translateX(24px);
+      transform: translateX(20px);
     }
 
         /* Legacy Status Messages - Hidden to avoid conflicts */
@@ -159,50 +194,67 @@
     .textarea {
       width: 100%;
       flex: 1;
-      min-height: 150px;
-      padding: 12px;
-      border: 1px solid #E6E6E6;
-      border-radius: 6px;
-      font-size: 12px;
-      font-family: 'Monaco', 'Menlo', monospace;
-      color: #1A1A1A;
+      min-height: 140px;
+      padding: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', monospace;
+      color: var(--text);
       resize: none;
       outline: none;
-      transition: border-color 0.2s ease;
+      transition: all 0.2s ease;
       overflow-y: auto;
-      margin-bottom: 4px;
+      margin-bottom: 8px;
+      box-shadow: var(--shadow-sm);
     }
 
     .textarea:focus {
-      border-color: #9747FF;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(151, 71, 255, 0.1);
     }
 
     .textarea::placeholder {
-      color: #1A1A1A;
-      opacity: 0.4;
-      font-size: 14px;
-      font-weight: 500;
+      color: var(--text-secondary);
+      opacity: 0.5;
     }
 
     .button {
       width: 100%;
-      height: 36px;
-      background: #9747FF;
+      height: 42px;
+      background: var(--primary-gradient);
       color: white;
       border: none;
-      border-radius: 6px;
+      border-radius: var(--radius-md);
       font-size: 14px;
-      font-weight: 500;
+      font-weight: 600;
       cursor: pointer;
-      transition: background-color 0.2s ease;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(151, 71, 255, 0.25);
     }
 
     .button:hover {
-      background: #8232FF;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(151, 71, 255, 0.35);
+      background: linear-gradient(135deg, #8232FF 0%, #631AD1 100%);
     }
 
     .button:active {
-      background: #7029E6;
+      transform: translateY(0);
+      opacity: 0.9;
+    }
+
+    .button:disabled {
+      background: #E5E7EB;
+      color: #9CA3AF;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
     }
 
     .test-button {
@@ -233,40 +285,48 @@
       opacity: 0.8;
     }
 
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
     /* MCP CONFIG PANEL STYLES */
     .config-panel {
-      margin-top: 12px;
-      padding: 12px;
-      background: #f8f9fa;
-      border: 1px solid #e0e0e0;
-      border-radius: 6px;
+      margin-top: 16px;
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-md);
+      animation: slideDown 0.3s cubic-bezier(0, 0, 0.2, 1);
     }
 
     .config-tabs {
       display: flex;
-      gap: 4px;
-      margin-bottom: 12px;
+      gap: 6px;
+      margin-bottom: 16px;
+      background: #F3F4F6;
+      padding: 3px;
+      border-radius: var(--radius-sm);
     }
 
     .config-tab {
       flex: 1;
-      padding: 6px 10px;
-      background: #e9ecef;
+      padding: 6px 8px;
+      background: transparent;
       border: none;
-      border-radius: 4px;
+      border-radius: 6px;
       font-size: 11px;
+      font-weight: 600;
       cursor: pointer;
-      color: #666;
+      color: var(--text-secondary);
       transition: all 0.2s;
     }
 
     .config-tab.active {
-      background: #9747FF;
-      color: white;
-    }
-
-    .config-tab:hover:not(.active) {
-      background: #dee2e6;
+      background: var(--surface);
+      color: var(--primary);
+      box-shadow: var(--shadow-sm);
     }
 
     .config-content {
@@ -287,16 +347,17 @@
     }
 
     .config-code {
-      background: #1e1e1e;
-      color: #d4d4d4;
-      padding: 10px;
-      border-radius: 4px;
-      font-family: 'Monaco', 'Menlo', monospace;
+      background: #0F172A;
+      color: #E2E8F0;
+      padding: 14px;
+      border-radius: var(--radius-sm);
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
       font-size: 10px;
-      line-height: 1.4;
+      line-height: 1.6;
       overflow-x: auto;
       white-space: pre;
       margin: 0;
+      border: 1px solid rgba(255,255,255,0.1);
     }
 
     .config-note {
@@ -359,27 +420,67 @@
       background: #22c55e;
     }
 
-    /* CONNECTION STATUS STYLES - Minimalist */
+    /* CONNECTION STATUS STYLES */
     .connection-status {
-      margin: 12px 0;
-      padding: 12px 0;
-      border-top: 1px solid #E6E6E6;
-      border-bottom: 1px solid #E6E6E6;
+      margin: 20px 0;
+      padding: 16px;
+      background: var(--surface);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
     }
 
     .status-row {
       display: flex;
       align-items: center;
-      margin: 6px 0;
+      margin: 8px 0;
     }
 
     .status-icon {
-      width: 8px;
-      height: 8px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
-      margin-right: 10px;
-      background: #ccc;
+      margin-right: 12px;
+      background: #E5E7EB;
       flex-shrink: 0;
+      position: relative;
+    }
+
+    .status-icon.connected::after {
+      content: "";
+      position: absolute;
+      top: -2px;
+      left: -2px;
+      right: -2px;
+      bottom: -2px;
+      border-radius: 50%;
+      background: inherit;
+      opacity: 0.4;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 0.4; }
+      70% { transform: scale(2); opacity: 0; }
+      100% { transform: scale(1); opacity: 0; }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: none;
+    }
+
+    .button:disabled .spinner {
+      display: block;
     }
 
     .status-icon.connected {
@@ -442,21 +543,24 @@
     }
 
     .button.secondary {
-      background: transparent;
-      color: #888;
+      background: var(--surface);
+      color: var(--text-secondary);
       font-size: 12px;
-      padding: 6px 12px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
+      font-weight: 600;
+      padding: 8px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
       cursor: pointer;
       transition: all 0.2s;
       width: auto;
       height: auto;
+      box-shadow: var(--shadow-sm);
     }
 
     .button.secondary:hover {
-      border-color: #999;
-      color: #666;
+      border-color: var(--primary);
+      color: var(--primary);
+      background: #FDFCFE;
     }
 
     .button.tertiary {
@@ -505,25 +609,31 @@
     /* Minimized state */
     .minimized-bar {
       display: none;
-      padding: 8px 12px;
-      background: #FFFFFF;
+      padding: 0 16px;
+      background: var(--surface);
       align-items: center;
-      gap: 10px;
-      height: 36px;
+      gap: 12px;
+      height: 48px;
+      border-radius: 24px;
+      box-shadow: var(--shadow-md);
+      margin: 4px;
+      border: 1px solid var(--border);
     }
 
     .minimized-bar .minimize-btn {
       margin-left: auto;
       transform: rotate(180deg);
-      padding-top: 0;
       padding-bottom: 3px;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
     }
 
     .minimized-bar .status-dot {
-      width: 8px;
-      height: 8px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
-      background: #dc3545;
+      background: #EF4444;
       flex-shrink: 0;
     }
 
@@ -563,6 +673,10 @@
 
   <!-- Main Content -->
   <div class="plugin-content" id="plugin-content">
+    <div class="header">
+      <h1 style="font-size: 20px; font-weight: 800; background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 4px;">HTML to Figma</h1>
+      <p class="subtitle">Convert web designs in seconds</p>
+    </div>
 
     <!-- Tabs -->
     <div class="tab-container">
@@ -573,13 +687,16 @@
 
   <!-- MCP Bridge Tab Content -->
   <div class="tab-content active" id="mcp-tab">
-    <div class="description-text">
-      Connect with AI tools via MCP to send HTML directly to Figma.
+    <div class="mcp-description">
+      Sync with AI assistants via the Model Context Protocol to design in real-time.
     </div>
 
     <!-- MAIN CONTROL -->
     <div class="switch-container">
-      <span class="switch-label">Enable MCP Bridge</span>
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span class="switch-label">MCP Bridge</span>
+        <span style="font-size: 11px; color: var(--text-secondary);">Enable real-time AI sync</span>
+      </div>
       <label class="switch">
         <input type="checkbox" id="mcp-switch">
         <span class="slider"></span>
@@ -587,7 +704,7 @@
     </div>
 
     <!-- CONNECTION STATUS -->
-    <div class="connection-status" id="connection-status">
+    <div class="connection-status" id="connection-status" style="margin-top: 0;">
       <div class="status-row">
         <span class="status-icon inactive" id="sse-indicator"></span>
         <span class="status-text" id="sse-status-text">SSE Disconnected</span>
@@ -655,42 +772,59 @@
 
   <!-- Paste HTML Tab Content -->
   <div class="tab-content" id="paste-tab">
-    <div class="description-text">Paste your HTML code and convert it to Figma elements</div>
+    <div class="mcp-description">Paste your HTML code below to instantly convert it into Figma layers.</div>
 
-    <div class="input-container">
+    <div class="input-container" style="background: var(--surface); padding: 16px; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm); margin-bottom: 24px;">
       <textarea
         id="html-input"
         class="textarea"
-        placeholder="Paste your HTML here..."
+        placeholder="<html>
+  <body>
+    <h1>Hello World</h1>
+  </body>
+</html>"
+        style="margin-bottom: 0; min-height: 200px; border: none; box-shadow: none; padding: 0;"
       ></textarea>
     </div>
 
-    <button id="send-btn" class="button">Convert to Figma</button>
+    <button id="send-btn" class="button">
+      <span class="spinner"></span>
+      <span>Convert to Figma</span>
+    </button>
   </div>
 
   <!-- Upload / URL Tab Content -->
   <div class="tab-content" id="upload-tab">
-    <div class="description-text">Upload an HTML file or import from a URL.</div>
+    <div class="mcp-description">Import designs directly from live URLs or local files.</div>
 
-    <div class="input-container">
-      <div style="margin-bottom: 16px;">
-        <label class="switch-label" style="margin-bottom: 8px; display: block;">Import from URL</label>
-        <div style="display: flex; gap: 8px;">
-          <input type="text" id="url-input" class="textarea" style="min-height: 36px; margin-bottom: 0; font-family: inherit;" placeholder="https://example.com">
-          <button id="url-import-btn" class="button" style="width: 80px;">Fetch</button>
+    <div class="input-container" style="gap: 20px;">
+      <div style="background: var(--surface); padding: 16px; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
+        <label class="switch-label" style="margin-bottom: 12px; display: block;">Import from URL</label>
+        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+          <input type="text" id="url-input" class="textarea" style="min-height: 42px; margin-bottom: 0; font-family: inherit; flex: 1;" placeholder="https://example.com">
+          <button id="url-import-btn" class="button secondary" style="height: 42px; width: 80px;">Fetch</button>
         </div>
-        <small class="status-detail" style="display: block; margin-top: 4px;">Note: Many sites block direct access (CORS). Paste HTML if fetch fails.</small>
+        <div class="status-detail" style="display: flex; gap: 4px; align-items: flex-start; color: var(--text-secondary);">
+          <span style="font-size: 14px;">ℹ️</span>
+          <span>Some sites block direct access due to security (CORS).</span>
+        </div>
       </div>
 
-      <div style="margin-bottom: 16px;">
-        <label class="switch-label" style="margin-bottom: 8px; display: block;">Upload HTML File</label>
-        <input type="file" id="file-input" accept=".html,.htm" style="display: none;">
-        <button id="file-upload-btn" class="button secondary" style="width: 100%;">Choose HTML File</button>
-        <div id="file-name" class="status-detail" style="text-align: center; margin-top: 4px;">No file chosen</div>
+      <div style="background: var(--surface); padding: 16px; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
+        <label class="switch-label" style="margin-bottom: 12px; display: block;">Local File</label>
+        <div id="drop-zone" style="border: 2px dashed var(--border); border-radius: var(--radius-md); padding: 32px 16px; text-align: center; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); background: #FCFCFD;">
+          <div style="font-size: 32px; margin-bottom: 12px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));">☁️</div>
+          <div id="file-name" class="status-text" style="font-weight: 700; color: var(--text); margin-bottom: 4px;">Drop HTML here</div>
+          <div class="status-detail" style="font-size: 11px;">or click to browse files</div>
+          <input type="file" id="file-input" accept=".html,.htm" style="display: none;">
+        </div>
       </div>
     </div>
 
-    <button id="upload-convert-btn" class="button" style="margin-top: 12px;" disabled>Convert to Figma</button>
+    <button id="upload-convert-btn" class="button" style="margin-top: 12px;" disabled>
+      <span class="spinner"></span>
+      <span>Convert to Figma</span>
+    </button>
   </div>
 
   </div><!-- End plugin-content -->
@@ -2100,12 +2234,37 @@ window.addEventListener('message', function(event) {
 var uploadedHtmlContent = "";
 
 // File upload handling
-document.getElementById('file-upload-btn').onclick = function() {
-  document.getElementById('file-input').click();
+var dropZone = document.getElementById('drop-zone');
+var fileInput = document.getElementById('file-input');
+
+dropZone.onclick = function() {
+  fileInput.click();
 };
 
-document.getElementById('file-input').onchange = function(e) {
-  var file = e.target.files[0];
+dropZone.ondragover = function(e) {
+  e.preventDefault();
+  dropZone.classList.add('drag-over');
+};
+
+dropZone.ondragleave = function() {
+  dropZone.classList.remove('drag-over');
+};
+
+dropZone.ondrop = function(e) {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files.length > 0) {
+    handleFile(e.dataTransfer.files[0]);
+  }
+};
+
+fileInput.onchange = function(e) {
+  if (e.target.files.length > 0) {
+    handleFile(e.target.files[0]);
+  }
+};
+
+function handleFile(file) {
   if (file) {
     document.getElementById('file-name').textContent = file.name;
     var reader = new FileReader();
@@ -2115,7 +2274,7 @@ document.getElementById('file-input').onchange = function(e) {
     };
     reader.readAsText(file);
   }
-};
+}
 
 // URL Import handling
 document.getElementById('url-import-btn').onclick = async function() {
