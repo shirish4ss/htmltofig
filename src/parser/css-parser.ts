@@ -36,8 +36,14 @@ export function filterUnsupportedCSS(styles: CSSProperties): CSSProperties {
  * Parse inline style string to object
  * Example: "color: red; font-size: 16px;" → { color: 'red', 'font-size': '16px' }
  */
+/**
+ * Parse inline style string to object
+ * Example: "color: red; font-size: 16px;" → { color: 'red', 'font-size': '16px' }
+ */
 export function parseInlineStyles(styleStr: string | undefined): CSSProperties {
   const styles: CSSProperties = {};
+  const importantStyles: CSSProperties = {};
+
   if (!styleStr) return styles;
 
   const declarations = styleStr.split(';');
@@ -46,14 +52,50 @@ export function parseInlineStyles(styleStr: string | undefined): CSSProperties {
     if (decl) {
       const colonIdx = decl.indexOf(':');
       if (colonIdx > 0) {
-        const prop = decl.substring(0, colonIdx).trim();
-        const val = decl.substring(colonIdx + 1).trim();
-        styles[prop] = val;
+        // Normalize property names to lowercase for consistency
+        const prop = decl.substring(0, colonIdx).trim().toLowerCase();
+        let val = decl.substring(colonIdx + 1).trim();
+
+        // Check for and strip !important
+        const isImportant = val.toLowerCase().indexOf('!important') !== -1;
+        if (isImportant) {
+          val = val.replace(/\s*!important\s*/gi, '').trim();
+        }
+
+        if (isImportant) {
+          importantStyles[prop] = val;
+        } else {
+          styles[prop] = val;
+        }
+
+        // Parse 'font' shorthand to extract font-size
+        if (prop === 'font' && val) {
+          const fontMatch = val.match(/(?:^|\s)(\d+(?:\.\d+)?(?:px|rem|em|pt|vh|vw|%)?)\s*(?:\/\s*[\d.]+(?:px|rem|em|%|[a-z]+)?)?\s+/i);
+          if (fontMatch) {
+            if (isImportant) {
+              importantStyles['font-size'] = fontMatch[1];
+            } else {
+              styles['font-size'] = fontMatch[1];
+            }
+          }
+        }
       }
     }
   }
 
-  return filterUnsupportedCSS(styles);
+  // Merge regular and important styles, preserving the !important marker for later detection if needed
+  // or just returning the filtered merged object.
+  // In the plugin context, we often want the final value.
+  const result = filterUnsupportedCSS(styles);
+  const importantFiltered = filterUnsupportedCSS(importantStyles);
+
+  for (const key in importantFiltered) {
+    if (importantFiltered.hasOwnProperty(key)) {
+      result[key] = importantFiltered[key];
+    }
+  }
+
+  return result;
 }
 
 /**

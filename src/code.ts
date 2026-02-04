@@ -80,7 +80,8 @@ interface StructureAnalysis {
 // Clases comunes que indican un contenedor principal
 const CONTAINER_CLASS_PATTERNS = [
   'container', 'wrapper', 'main', 'content', 'layout',
-  'app', 'page', 'grid', 'bento', 'card-grid', 'dashboard'
+  'app', 'page', 'grid', 'bento', 'card-grid', 'dashboard',
+  'inner', 'wrap', 'shell', 'base'
 ];
 
 /**
@@ -531,7 +532,7 @@ function applyStylesToFrame(frame: FrameNode, styles: any) {
         type: 'LAYER_BLUR',
         radius: filter.blur,
         visible: true
-      });
+      } as BlurEffect);
     }
 
     // Apply drop shadow from filter
@@ -562,7 +563,7 @@ function applyStylesToFrame(frame: FrameNode, styles: any) {
         type: 'BACKGROUND_BLUR',
         radius: backdropFilter.blur,
         visible: true
-      });
+      } as BlurEffect);
       frame.effects = effects;
     }
   }
@@ -694,7 +695,7 @@ function applyStylesToFrame(frame: FrameNode, styles: any) {
 
 }
 
-function applyStylesToText(text: TextNode, styles: any) {
+async function applyStylesToText(text: TextNode, styles: any) {
   // Text color - SIEMPRE aplicar color (heredado o negro por defecto)
   let textColor = { r: 0, g: 0, b: 0 }; // Negro por defecto
   
@@ -713,8 +714,6 @@ function applyStylesToText(text: TextNode, styles: any) {
       }
     }
   }
-  
-
   
   // SIEMPRE aplicar el color (nunca dejar undefined)
   text.fills = [{ type: 'SOLID', color: textColor }];
@@ -736,6 +735,10 @@ function applyStylesToText(text: TextNode, styles: any) {
       // %: usar PERCENT
       const percent = parseFloat(value);
       if (!isNaN(percent)) text.lineHeight = { value: percent, unit: 'PERCENT' };
+    } else if (value.match(/^[0-9.]+(rem|em)$/)) {
+      // rem/em: convertir a px y usar PIXELS
+      const px = parseSize(value);
+      if (px !== null) text.lineHeight = { value: px, unit: 'PIXELS' };
     } else if (!isNaN(Number(value))) {
       // Unitless (ej: 1.5): convertir a porcentaje (1.5 = 150%)
       const multiplier = parseFloat(value);
@@ -759,31 +762,34 @@ function applyStylesToText(text: TextNode, styles: any) {
     const weight = styles['font-weight'];
     if (weight === 'bold' || weight === '700' || weight === '800' || weight === '900') {
       // Try to load bold font, fallback to size increase
-      figma.loadFontAsync({ family: "Inter", style: "Bold" }).then(() => {
+      try {
+        await figma.loadFontAsync({ family: "Inter", style: "Bold" });
         text.fontName = { family: "Inter", style: "Bold" };
-      }).catch(() => {
+      } catch (e) {
         // Fallback: increase size
         const currentSize = typeof text.fontSize === 'number' ? text.fontSize : 16;
         text.fontSize = currentSize * 1.1;
-      });
+      }
     } else if (weight === 'lighter' || weight === '300' || weight === '200' || weight === '100') {
-      figma.loadFontAsync({ family: "Inter", style: "Light" }).then(() => {
+      try {
+        await figma.loadFontAsync({ family: "Inter", style: "Light" });
         text.fontName = { family: "Inter", style: "Light" };
-      }).catch(() => {
+      } catch (e) {
         // Fallback: decrease size slightly
         const currentSize = typeof text.fontSize === 'number' ? text.fontSize : 16;
         text.fontSize = currentSize * 0.9;
-      });
+      }
     }
   }
   
   // Font style (italic)
   if (styles['font-style'] === 'italic') {
-    figma.loadFontAsync({ family: "Inter", style: "Italic" }).then(() => {
+    try {
+      await figma.loadFontAsync({ family: "Inter", style: "Italic" });
       text.fontName = { family: "Inter", style: "Italic" };
-    }).catch(() => {
+    } catch (e) {
       // Fallback: no italic available
-    });
+    }
   }
 
   // Text decoration
@@ -1215,15 +1221,15 @@ async function createGridLayoutWithSpans(
 
   try {
     // Test if GRID mode is supported
-    testParent.layoutMode = 'GRID';
+    (testParent as any).layoutMode = 'GRID';
 
     // Check if gridColumnCount exists and is settable
-    if (typeof testParent.gridColumnCount === 'undefined') {
+    if (typeof (testParent as any).gridColumnCount === 'undefined') {
       throw new Error('Grid properties not available');
     }
 
-    testParent.gridColumnCount = 2;
-    testParent.gridRowCount = 1;
+    (testParent as any).gridColumnCount = 2;
+    (testParent as any).gridRowCount = 1;
 
     // Test if child positioning properties work
     const testChild = figma.createFrame();
@@ -1254,20 +1260,21 @@ async function createGridLayoutWithSpans(
 
   // Step 3: Configure parent frame as native Figma Grid (only if test passed)
   try {
-    parentFrame.layoutMode = 'GRID';
-    parentFrame.gridColumnCount = columns;
-    parentFrame.gridRowCount = numRows;
-    parentFrame.gridColumnGap = gap;
-    parentFrame.gridRowGap = gap;
+    const pf = parentFrame as any;
+    pf.layoutMode = 'GRID';
+    pf.gridColumnCount = columns;
+    pf.gridRowCount = numRows;
+    pf.gridColumnGap = gap;
+    pf.gridRowGap = gap;
 
     // Set all columns to FLEX (equivalent to CSS 1fr)
-    for (let i = 0; i < parentFrame.gridColumnSizes.length; i++) {
-      parentFrame.gridColumnSizes[i].type = 'FLEX';
+    for (let i = 0; i < pf.gridColumnSizes.length; i++) {
+      pf.gridColumnSizes[i].type = 'FLEX';
     }
 
     // Set all rows to FLEX for equal height distribution
-    for (let i = 0; i < parentFrame.gridRowSizes.length; i++) {
-      parentFrame.gridRowSizes[i].type = 'FLEX';
+    for (let i = 0; i < pf.gridRowSizes.length; i++) {
+      pf.gridRowSizes[i].type = 'FLEX';
     }
 
     // Debug log removed
@@ -2075,7 +2082,7 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
 
               // Apply inherited styles and specific text styles
               const textStyles = { ...inheritableStyles, ...node.styles };
-              applyStylesToText(textNode, textStyles);
+              await applyStylesToText(textNode, textStyles);
 
               frame.appendChild(textNode);
 
@@ -2107,7 +2114,7 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
             textNode.name = 'DIV Text';
 
             // Apply inherited styles and specific text styles
-            applyStylesToText(textNode, { ...inheritableStyles, ...node.styles });
+            await applyStylesToText(textNode, { ...inheritableStyles, ...node.styles });
 
             frame.appendChild(textNode);
 
@@ -2545,7 +2552,7 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
 
         // Apply additional text styles from CSS
         if (node.styles) {
-          applyStylesToText(cellText, node.styles);
+          await applyStylesToText(cellText, node.styles);
         }
         
         // Check if parent has text-align center and inherit it
@@ -2631,7 +2638,7 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
         
         // Apply text styles if present
         if (node.styles) {
-          applyStylesToText(buttonText, node.styles);
+          await applyStylesToText(buttonText, node.styles);
         }
         
         frame.appendChild(buttonText);
@@ -2650,20 +2657,36 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
         
         const frame = figma.createFrame();
         frame.resize(width, height);
-        frame.fills = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }];
         frame.name = 'Image: ' + (node.attributes?.alt || 'Unnamed');
-        
-        // Center the placeholder text
-        frame.layoutMode = 'HORIZONTAL';
-        frame.primaryAxisAlignItems = 'CENTER';
-        frame.counterAxisAlignItems = 'CENTER';
-        
-        // Add placeholder text
-        await figma.loadFontAsync({ family: "Inter", style: "Regular" });
-        const placeholderText = figma.createText();
-        placeholderText.characters = node.attributes?.alt || 'Image';
-        placeholderText.fills = [{ type: 'SOLID', color: { r: 0.5, g: 0.5, b: 0.5 } }];
-        frame.appendChild(placeholderText);
+
+        if (node.imageData) {
+          try {
+            const uint8Array = new Uint8Array(node.imageData);
+            const image = figma.createImage(uint8Array);
+            frame.fills = [{
+              type: 'IMAGE',
+              imageHash: image.hash,
+              scaleMode: 'FILL'
+            }];
+          } catch (e) {
+            console.error('Error creating image:', e);
+            frame.fills = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }];
+          }
+        } else {
+          frame.fills = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }];
+
+          // Center the placeholder text
+          frame.layoutMode = 'HORIZONTAL';
+          frame.primaryAxisAlignItems = 'CENTER';
+          frame.counterAxisAlignItems = 'CENTER';
+
+          // Add placeholder text
+          await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+          const placeholderText = figma.createText();
+          placeholderText.characters = node.attributes?.alt || 'Image';
+          placeholderText.fills = [{ type: 'SOLID', color: { r: 0.5, g: 0.5, b: 0.5 } }];
+          frame.appendChild(placeholderText);
+        }
         
         if (!parentFrame) {
           frame.x = startX;
@@ -2714,7 +2737,7 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
         
         // Apply styles (including new text properties)
         if (node.styles) {
-          applyStylesToText(text, node.styles);
+          await applyStylesToText(text, node.styles);
         }
         
         // Check if parent has text-align center and inherit it
@@ -2778,7 +2801,7 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
           
           // Apply text styles
           if (node.styles) {
-            applyStylesToText(text, node.styles);
+            await applyStylesToText(text, node.styles);
           }
           
           spanFrame.appendChild(text);
@@ -2861,7 +2884,7 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
 
         // Apply styles first (including new text properties)
         if (node.styles) {
-          applyStylesToText(text, node.styles);
+          await applyStylesToText(text, node.styles);
         }
         
         // Check if parent has text-align center and inherit it

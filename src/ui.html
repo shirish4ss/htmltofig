@@ -568,6 +568,7 @@
     <div class="tab-container">
     <button class="tab active" data-tab="mcp">MCP Bridge</button>
     <button class="tab" data-tab="paste">Paste HTML</button>
+    <button class="tab" data-tab="upload">Upload / URL</button>
   </div>
 
   <!-- MCP Bridge Tab Content -->
@@ -665,6 +666,31 @@
     </div>
 
     <button id="send-btn" class="button">Convert to Figma</button>
+  </div>
+
+  <!-- Upload / URL Tab Content -->
+  <div class="tab-content" id="upload-tab">
+    <div class="description-text">Upload an HTML file or import from a URL.</div>
+
+    <div class="input-container">
+      <div style="margin-bottom: 16px;">
+        <label class="switch-label" style="margin-bottom: 8px; display: block;">Import from URL</label>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="url-input" class="textarea" style="min-height: 36px; margin-bottom: 0; font-family: inherit;" placeholder="https://example.com">
+          <button id="url-import-btn" class="button" style="width: 80px;">Fetch</button>
+        </div>
+        <small class="status-detail" style="display: block; margin-top: 4px;">Note: Many sites block direct access (CORS). Paste HTML if fetch fails.</small>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label class="switch-label" style="margin-bottom: 8px; display: block;">Upload HTML File</label>
+        <input type="file" id="file-input" accept=".html,.htm" style="display: none;">
+        <button id="file-upload-btn" class="button secondary" style="width: 100%;">Choose HTML File</button>
+        <div id="file-name" class="status-detail" style="text-align: center; margin-top: 4px;">No file chosen</div>
+      </div>
+    </div>
+
+    <button id="upload-convert-btn" class="button" style="margin-top: 12px;" disabled>Convert to Figma</button>
   </div>
 
   </div><!-- End plugin-content -->
@@ -1898,6 +1924,7 @@ function simpleParseHTML(htmlStr) {
           value: node.getAttribute('value'),
           placeholder: node.getAttribute('placeholder'),
           alt: node.getAttribute('alt'),
+          src: node.getAttribute('src'),
           rows: node.getAttribute('rows')
         },
         children: children,
@@ -1925,25 +1952,40 @@ function simpleParseHTML(htmlStr) {
 }
 
 // Convert to Figma button functionality
-document.getElementById('send-btn').onclick = function() {
+document.getElementById('send-btn').onclick = async function() {
   var htmlValue = document.getElementById('html-input').value;
   if (!htmlValue.trim()) {
     alert('Please paste some HTML code first.');
     return;
   }
 
-  var structure = simpleParseHTML(htmlValue);
-  var detectedWidth = detectDesignWidthFromHTML(htmlValue);
-  var detectedRemBase = detectRootFontSize(htmlValue);
+  this.disabled = true;
+  this.textContent = 'Processing...';
 
-  parent.postMessage({
-    pluginMessage: {
-      type: 'html-structure',
-      structure: structure,
-      detectedWidth: detectedWidth,
-      detectedRemBase: detectedRemBase
-    }
-  }, '*');
+  try {
+    var structure = simpleParseHTML(htmlValue);
+
+    // Fetch images before sending to plugin
+    await collectAndFetchImages(structure);
+
+    var detectedWidth = detectDesignWidthFromHTML(htmlValue);
+    var detectedRemBase = detectRootFontSize(htmlValue);
+
+    parent.postMessage({
+      pluginMessage: {
+        type: 'html-structure',
+        structure: structure,
+        detectedWidth: detectedWidth,
+        detectedRemBase: detectedRemBase
+      }
+    }, '*');
+  } catch (error) {
+    console.error('Conversion error:', error);
+    alert('Error during conversion: ' + error.message);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Convert to Figma';
+  }
 };
 
 // Test Connection button functionality - REMOVED (now handled by addEventListener above)
@@ -2050,6 +2092,160 @@ window.addEventListener('message', function(event) {
     }
   }
 });
+
+// ===============================================
+// UPLOAD & URL FUNCTIONALITY
+// ===============================================
+
+var uploadedHtmlContent = "";
+
+// File upload handling
+document.getElementById('file-upload-btn').onclick = function() {
+  document.getElementById('file-input').click();
+};
+
+document.getElementById('file-input').onchange = function(e) {
+  var file = e.target.files[0];
+  if (file) {
+    document.getElementById('file-name').textContent = file.name;
+    var reader = new FileReader();
+    reader.onload = function(event) {
+      uploadedHtmlContent = event.target.result;
+      document.getElementById('upload-convert-btn').disabled = false;
+    };
+    reader.readAsText(file);
+  }
+};
+
+// URL Import handling
+document.getElementById('url-import-btn').onclick = async function() {
+  var url = document.getElementById('url-input').value.trim();
+  if (!url) {
+    alert('Please enter a URL');
+    return;
+  }
+
+  if (!url.startsWith('http')) {
+    url = 'https://' + url;
+  }
+
+  updateConnectionDetails('Fetching URL...');
+  this.disabled = true;
+  this.textContent = '...';
+
+  try {
+    var response = await fetch(url);
+    if (!response.ok) throw new Error('Failed to fetch: ' + response.statusText);
+
+    var html = await response.text();
+
+    // Try to embed external styles if possible (might still hit CORS)
+    uploadedHtmlContent = await fetchAndEmbedStyles(html, url);
+
+    document.getElementById('upload-convert-btn').disabled = false;
+    updateConnectionDetails('URL fetched successfully');
+    alert('Webpage fetched! You can now click Convert.');
+  } catch (error) {
+    console.error('URL import error:', error);
+    updateConnectionDetails('Fetch failed: ' + error.message);
+    alert('Fetch failed (likely CORS). Try pasting the HTML code instead.');
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Fetch';
+  }
+};
+
+// Convert button for Upload/URL tab
+document.getElementById('upload-convert-btn').onclick = async function() {
+  if (!uploadedHtmlContent) return;
+
+  this.disabled = true;
+  var originalText = this.textContent;
+  this.textContent = 'Processing...';
+
+  try {
+    var structure = simpleParseHTML(uploadedHtmlContent);
+
+    // Fetch images before sending to plugin
+    await collectAndFetchImages(structure);
+
+    var detectedWidth = detectDesignWidthFromHTML(uploadedHtmlContent);
+    var detectedRemBase = detectRootFontSize(uploadedHtmlContent);
+
+    parent.postMessage({
+      pluginMessage: {
+        type: 'html-structure',
+        structure: structure,
+        detectedWidth: detectedWidth,
+        detectedRemBase: detectedRemBase
+      }
+    }, '*');
+  } catch (error) {
+    console.error('Conversion error:', error);
+    alert('Error during conversion: ' + error.message);
+  } finally {
+    this.disabled = false;
+    this.textContent = originalText;
+  }
+};
+
+// Helper: Collect and fetch images from structure
+async function collectAndFetchImages(structure) {
+  async function traverse(nodes) {
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      if (node.tagName === 'img' && node.attributes && node.attributes.src) {
+        var src = node.attributes.src;
+        // Skip data URLs as they don't need fetching (though they could be large)
+        if (src.startsWith('http')) {
+          try {
+            debugLog('[IMAGE] Fetching:', src);
+            var response = await fetch(src);
+            if (response.ok) {
+              var buffer = await response.arrayBuffer();
+              // Store as regular array for safer postMessage transfer across all environments
+              node.imageData = Array.from(new Uint8Array(buffer));
+              debugLog('[IMAGE] Fetched successfully:', src);
+            }
+          } catch (e) {
+            console.error('Failed to fetch image:', src, e);
+          }
+        }
+      }
+      if (node.children && node.children.length > 0) {
+        await traverse(node.children);
+      }
+    }
+  }
+  await traverse(structure);
+}
+
+// Helper: Fetch and embed external stylesheets
+async function fetchAndEmbedStyles(htmlStr, baseUrl) {
+  var parser = new DOMParser();
+  var doc = parser.parseFromString(htmlStr, 'text/html');
+  var links = doc.querySelectorAll('link[rel="stylesheet"]');
+
+  for (var i = 0; i < links.length; i++) {
+    var href = links[i].getAttribute('href');
+    if (href) {
+      try {
+        var fullUrl = new URL(href, baseUrl).href;
+        var response = await fetch(fullUrl);
+        if (response.ok) {
+          var cssText = await response.text();
+          var style = doc.createElement('style');
+          style.textContent = cssText;
+          links[i].parentNode.replaceChild(style, links[i]);
+          debugLog('[CSS] Embedded external stylesheet:', fullUrl);
+        }
+      } catch (e) {
+        console.error('Failed to fetch stylesheet:', href, e);
+      }
+    }
+  }
+  return doc.documentElement.outerHTML;
+}
 
 // ===============================================
 // SSE FUNCTIONALITY - Real Implementation

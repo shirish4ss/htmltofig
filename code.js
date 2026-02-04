@@ -721,7 +721,11 @@
     "grid",
     "bento",
     "card-grid",
-    "dashboard"
+    "dashboard",
+    "inner",
+    "wrap",
+    "shell",
+    "base"
   ];
   function isMainContainer(className, tagName) {
     if (!className && tagName !== "main") return false;
@@ -1140,7 +1144,7 @@
       frame.setPluginData("centerHorizontally", "true");
     }
   }
-  function applyStylesToText(text, styles) {
+  async function applyStylesToText(text, styles) {
     let textColor = { r: 0, g: 0, b: 0 };
     if (styles.color) {
       const color = hexToRgb(styles.color);
@@ -1168,6 +1172,9 @@
       } else if (value.match(/^[0-9.]+%$/)) {
         const percent = parseFloat(value);
         if (!isNaN(percent)) text.lineHeight = { value: percent, unit: "PERCENT" };
+      } else if (value.match(/^[0-9.]+(rem|em)$/)) {
+        const px = parseSize(value);
+        if (px !== null) text.lineHeight = { value: px, unit: "PIXELS" };
       } else if (!isNaN(Number(value))) {
         const multiplier = parseFloat(value);
         if (!isNaN(multiplier) && multiplier > 0) {
@@ -1184,26 +1191,29 @@
     if (styles["font-weight"]) {
       const weight = styles["font-weight"];
       if (weight === "bold" || weight === "700" || weight === "800" || weight === "900") {
-        figma.loadFontAsync({ family: "Inter", style: "Bold" }).then(() => {
+        try {
+          await figma.loadFontAsync({ family: "Inter", style: "Bold" });
           text.fontName = { family: "Inter", style: "Bold" };
-        }).catch(() => {
+        } catch (e) {
           const currentSize = typeof text.fontSize === "number" ? text.fontSize : 16;
           text.fontSize = currentSize * 1.1;
-        });
+        }
       } else if (weight === "lighter" || weight === "300" || weight === "200" || weight === "100") {
-        figma.loadFontAsync({ family: "Inter", style: "Light" }).then(() => {
+        try {
+          await figma.loadFontAsync({ family: "Inter", style: "Light" });
           text.fontName = { family: "Inter", style: "Light" };
-        }).catch(() => {
+        } catch (e) {
           const currentSize = typeof text.fontSize === "number" ? text.fontSize : 16;
           text.fontSize = currentSize * 0.9;
-        });
+        }
       }
     }
     if (styles["font-style"] === "italic") {
-      figma.loadFontAsync({ family: "Inter", style: "Italic" }).then(() => {
+      try {
+        await figma.loadFontAsync({ family: "Inter", style: "Italic" });
         text.fontName = { family: "Inter", style: "Italic" };
-      }).catch(() => {
-      });
+      } catch (e) {
+      }
     }
     if (styles["text-decoration"]) {
       const decoration = styles["text-decoration"];
@@ -1478,16 +1488,17 @@
       return;
     }
     try {
-      parentFrame.layoutMode = "GRID";
-      parentFrame.gridColumnCount = columns;
-      parentFrame.gridRowCount = numRows;
-      parentFrame.gridColumnGap = gap;
-      parentFrame.gridRowGap = gap;
-      for (let i = 0; i < parentFrame.gridColumnSizes.length; i++) {
-        parentFrame.gridColumnSizes[i].type = "FLEX";
+      const pf = parentFrame;
+      pf.layoutMode = "GRID";
+      pf.gridColumnCount = columns;
+      pf.gridRowCount = numRows;
+      pf.gridColumnGap = gap;
+      pf.gridRowGap = gap;
+      for (let i = 0; i < pf.gridColumnSizes.length; i++) {
+        pf.gridColumnSizes[i].type = "FLEX";
       }
-      for (let i = 0; i < parentFrame.gridRowSizes.length; i++) {
-        parentFrame.gridRowSizes[i].type = "FLEX";
+      for (let i = 0; i < pf.gridRowSizes.length; i++) {
+        pf.gridRowSizes[i].type = "FLEX";
       }
     } catch (error) {
       console.error("[GRID-NATIVE] Error configuring grid after test passed:", error);
@@ -2050,7 +2061,7 @@
                 textNode.characters = item.text.trim();
                 textNode.name = "Inline Text";
                 const textStyles = __spreadValues(__spreadValues({}, inheritableStyles), node.styles);
-                applyStylesToText(textNode, textStyles);
+                await applyStylesToText(textNode, textStyles);
                 frame.appendChild(textNode);
                 if (frame.layoutMode === "HORIZONTAL" && hasOnlyText && wantsCentering) {
                   textNode.layoutSizingHorizontal = "FILL";
@@ -2074,7 +2085,7 @@
               const textNode = figma.createText();
               textNode.characters = node.text.trim();
               textNode.name = "DIV Text";
-              applyStylesToText(textNode, __spreadValues(__spreadValues({}, inheritableStyles), node.styles));
+              await applyStylesToText(textNode, __spreadValues(__spreadValues({}, inheritableStyles), node.styles));
               frame.appendChild(textNode);
               const legacyJustifyContent = (_Ra = node.styles) == null ? void 0 : _Ra["justify-content"];
               const legacyWantsCentering = legacyJustifyContent === "center" || legacyJustifyContent === "flex-end" || legacyJustifyContent === "end";
@@ -2399,7 +2410,7 @@
           }
           cell.appendChild(cellText);
           if (node.styles) {
-            applyStylesToText(cellText, node.styles);
+            await applyStylesToText(cellText, node.styles);
           }
           if (parentFrame && parentFrame.getPluginData("textAlign") === "center") {
             if (!((_cc = node.styles) == null ? void 0 : _cc["text-align"])) {
@@ -2460,7 +2471,7 @@
             buttonText.fills = [{ type: "SOLID", color: { r: 0, g: 0, b: 0 } }];
           }
           if (node.styles) {
-            applyStylesToText(buttonText, node.styles);
+            await applyStylesToText(buttonText, node.styles);
           }
           frame.appendChild(buttonText);
           if (!parentFrame) {
@@ -2475,16 +2486,31 @@
           const height = parseSize((_Bc = node.styles) == null ? void 0 : _Bc.height) || 150;
           const frame = figma.createFrame();
           frame.resize(width, height);
-          frame.fills = [{ type: "SOLID", color: { r: 0.9, g: 0.9, b: 0.9 } }];
           frame.name = "Image: " + (((_Cc = node.attributes) == null ? void 0 : _Cc.alt) || "Unnamed");
-          frame.layoutMode = "HORIZONTAL";
-          frame.primaryAxisAlignItems = "CENTER";
-          frame.counterAxisAlignItems = "CENTER";
-          await figma.loadFontAsync({ family: "Inter", style: "Regular" });
-          const placeholderText = figma.createText();
-          placeholderText.characters = ((_Dc = node.attributes) == null ? void 0 : _Dc.alt) || "Image";
-          placeholderText.fills = [{ type: "SOLID", color: { r: 0.5, g: 0.5, b: 0.5 } }];
-          frame.appendChild(placeholderText);
+          if (node.imageData) {
+            try {
+              const uint8Array = new Uint8Array(node.imageData);
+              const image = figma.createImage(uint8Array);
+              frame.fills = [{
+                type: "IMAGE",
+                imageHash: image.hash,
+                scaleMode: "FILL"
+              }];
+            } catch (e) {
+              console.error("Error creating image:", e);
+              frame.fills = [{ type: "SOLID", color: { r: 0.9, g: 0.9, b: 0.9 } }];
+            }
+          } else {
+            frame.fills = [{ type: "SOLID", color: { r: 0.9, g: 0.9, b: 0.9 } }];
+            frame.layoutMode = "HORIZONTAL";
+            frame.primaryAxisAlignItems = "CENTER";
+            frame.counterAxisAlignItems = "CENTER";
+            await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+            const placeholderText = figma.createText();
+            placeholderText.characters = ((_Dc = node.attributes) == null ? void 0 : _Dc.alt) || "Image";
+            placeholderText.fills = [{ type: "SOLID", color: { r: 0.5, g: 0.5, b: 0.5 } }];
+            frame.appendChild(placeholderText);
+          }
           if (!parentFrame) {
             frame.x = startX;
             frame.y = startY;
@@ -2522,7 +2548,7 @@
           text.characters = bullet + (node.text || "List item");
           text.name = "List Item";
           if (node.styles) {
-            applyStylesToText(text, node.styles);
+            await applyStylesToText(text, node.styles);
           }
           if (parentFrame && parentFrame.getPluginData("textAlign") === "center") {
             if (!((_Fc = node.styles) == null ? void 0 : _Fc["text-align"])) {
@@ -2563,7 +2589,7 @@
             text.characters = node.text || "Badge text";
             text.name = "BADGE Text";
             if (node.styles) {
-              applyStylesToText(text, node.styles);
+              await applyStylesToText(text, node.styles);
             }
             spanFrame.appendChild(text);
             if (!parentFrame) {
@@ -2619,7 +2645,7 @@
               text.textDecoration = "UNDERLINE";
             }
             if (node.styles) {
-              applyStylesToText(text, node.styles);
+              await applyStylesToText(text, node.styles);
             }
             if (parentFrame && parentFrame.getPluginData("textAlign") === "center") {
               if (!((_Kc = node.styles) == null ? void 0 : _Kc["text-align"])) {
