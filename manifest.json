@@ -1,9 +1,9 @@
 {
-  "name": "HTML to Figma",
+  "name": "HTML, Web & URL to Figma AI",
   "id": "html-to-figma",
   "api": "1.0.0",
   "main": "code.js",
   "ui": "ui.html",
   "editorType": ["figma"],
   "enableProposedApi": false
-} 
+}

@@ -1,5 +1,5 @@
 <html>
-<head><title>HTML to Figma Pro</title><style>
+<head><title>HTML, Web & URL to Figma AI</title><style>
     :root {
       --primary: #9333EA;
       --primary-hover: #A855F7;
@@ -20,6 +20,13 @@
 
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
       background: var(--bg);
@@ -30,12 +37,15 @@
       line-height: 1.6;
       display: flex;
       flex-direction: column;
-      overflow-x: hidden;
-      height: auto;
-      min-height: 700px;
     }
 
-    .app-wrapper { display: flex; flex-direction: column; height: 100%; animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+    .app-wrapper {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      overflow: hidden;
+    }
 
     header {
       padding: 16px 20px;
@@ -46,8 +56,7 @@
       background: rgba(15, 23, 42, 0.8);
       backdrop-filter: blur(12px);
       z-index: 100;
-      position: sticky;
-      top: 0;
+      flex-shrink: 0;
     }
 
     .logo-area { display: flex; align-items: center; gap: 10px; }
@@ -82,15 +91,26 @@
     }
     .donation-btn:hover { background: rgba(245, 158, 11, 0.2); transform: translateY(-1px); }
 
-    .content-area { flex: 1; padding: 24px 20px; overflow-y: auto; }
+    .content-area {
+      flex: 1;
+      padding: 24px 20px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--primary) transparent;
+    }
+
+    .content-area::-webkit-scrollbar { width: 6px; }
+    .content-area::-webkit-scrollbar-track { background: transparent; }
+    .content-area::-webkit-scrollbar-thumb { background-color: var(--primary); border-radius: 20px; }
 
     .hero-section { margin-bottom: 24px; }
     .hero-title { font-size: 24px; font-weight: 800; margin-bottom: 4px; }
-    .hero-subtitle { font-size: 14px; color: var(--text-secondary); }
+    .hero-subtitle { font-size: 13px; color: var(--text-secondary); line-height: 1.4; }
 
     .tab-container {
       display: flex; gap: 4px; margin-bottom: 24px;
       background: rgba(255, 255, 255, 0.05); padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 10; backdrop-filter: blur(8px);
     }
     .tab {
       flex: 1; padding: 10px; background: transparent; border: none; border-radius: 10px;
@@ -130,7 +150,7 @@
     .status-icon.warning { background: #F59E0B; }
     .status-icon.error { background: #EF4444; }
 
-    .history-section { margin-top: 32px; border-top: 1px solid var(--border); padding-top: 24px; margin-bottom: 60px; }
+    .history-section { margin-top: 32px; border-top: 1px solid var(--border); padding-top: 24px; margin-bottom: 20px; }
     .history-item {
       padding: 14px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 14px;
       margin-bottom: 10px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center;
@@ -140,10 +160,12 @@
     .footer {
       padding: 20px; border-top: 1px solid var(--border); background: rgba(15, 23, 42, 0.9);
       display: flex; flex-direction: column; align-items: center; gap: 12px;
+      flex-shrink: 0;
     }
-    .social-links { display: flex; gap: 16px; }
-    .social-link { color: var(--text-secondary); text-decoration: none; transition: color 0.2s; font-size: 12px; display: flex; align-items: center; gap: 4px; }
+    .social-links { display: flex; gap: 16px; align-items: center; }
+    .social-link { color: var(--text-secondary); text-decoration: none; transition: color 0.2s; font-size: 12px; display: flex; align-items: center; gap: 6px; }
     .social-link:hover { color: var(--primary); }
+    .social-link svg { width: 14px; height: 14px; opacity: 0.8; }
 
     .minimized-bar {
       display: none; padding: 0 16px; background: var(--bg); align-items: center; justify-content: space-between; height: 40px;
@@ -187,8 +209,8 @@
   <div class="app-wrapper">
     <header>
       <div class="logo-area">
-        <div class="logo-icon">H</div>
-        <div class="logo-text">FIGMA.IO</div>
+        <div class="logo-icon">W</div>
+        <div class="logo-text">HTML.IO</div>
       </div>
       <div class="header-actions">
         <a href="https://www.buymeacoffee.com/shirish" target="_blank" style="text-decoration: none;">
@@ -202,8 +224,8 @@
 
     <main class="content-area">
       <div class="hero-section">
-        <h1 class="hero-title">HTML to <span style="background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Figma</span></h1>
-        <p class="hero-subtitle">Convert web components to design nodes instantly.</p>
+        <h1 class="hero-title">HTML, Web & URL to <span style="background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Figma AI</span></h1>
+        <p class="hero-subtitle">Convert Code, URLs, and Webpages instantly.<br>Developed by Shirish Salve.</p>
       </div>
 
       <nav class="tab-container">
@@ -336,9 +358,16 @@
         Fuel my creativity and get exclusive updates by supporting me on <a href="https://www.patreon.com/cw/shirishsalve" target="_blank" style="color: var(--primary); text-decoration: none; font-weight: 600;">Patreon</a>
       </div>
       <div class="social-links">
-        <a href="https://www.behance.net/myselfshirish" target="_blank" class="social-link">Behance</a>
-        <a href="https://www.buymeacoffee.com/shirish" target="_blank" style="text-decoration: none; margin-left: 10px;">
+        <a href="https://www.behance.net/myselfshirish" target="_blank" class="social-link">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.228 15.01c0 .412.04.773.118 1.083.078.31.202.569.373.777.17.208.388.364.654.468.266.104.588.156.966.156.335 0 .633-.047.892-.14.26-.094.475-.224.646-.39.171-.166.3-.367.387-.604.086-.237.13-.501.13-.792h-4.166zm10.21-3.132c-.313 0-.585.05-.815.15-.23.1-.42.238-.568.413-.148.175-.256.38-.323.616-.067.236-.1.492-.1.768h3.582c-.006-.28-.046-.536-.12-.768-.074-.233-.186-.432-.338-.598a1.762 1.762 0 00-.573-.424 1.772 1.772 0 00-.745-.157zM24 0v24H0V0h24zM11.954 11.21c.217-.116.402-.266.554-.45.152-.183.27-.399.356-.648.086-.25.128-.528.128-.836 0-.34-.05-.644-.15-.913a2.164 2.164 0 00-.422-.727 2.152 2.152 0 00-.693-.501c-.282-.125-.615-.187-.999-.187H6.558v8.604h4.372c.44 0 .817-.066 1.13-.197a2.36 2.36 0 00.82-.54c.216-.229.377-.514.484-.855.107-.34.16-.723.16-1.147 0-.342-.04-.654-.12-.936a2.27 2.27 0 00-.361-.75c-.206-.275-.487-.492-.84-.652a2.3 2.3 0 00-.249-.166zm3.328 1.488h7.246v-1.282h-7.246v1.282zm2.946 1.18c-.451 0-.853.082-1.206.246-.353.164-.65.395-.892.694-.242.298-.426.657-.551 1.075-.126.419-.188.887-.188 1.405 0 .506.064.97.191 1.391.128.421.317.781.567 1.079.25.298.56.529.93.692.37.163.792.245 1.266.245.424 0 .807-.064 1.15-.192.342-.128.636-.31.881-.547.245-.237.437-.52.576-.848.139-.328.214-.689.224-1.082h-1.928c-.015.197-.058.373-.13.528a.936.936 0 01-.334.373 1.008 1.008 0 01-.482.162c-.173.018-.344.027-.513.027-.307 0-.58-.046-.82-.138-.24-.093-.438-.231-.594-.413a2.128 2.128 0 01-.363-.67 3.322 3.322 0 01-.137-.905h6.392c.007-.091.011-.19.011-.295 0-.542-.064-1.037-.193-1.484a3.39 3.39 0 00-.547-1.187 3.09 3.09 0 00-.91-.853c-.381-.237-.847-.356-1.396-.356zM8.324 6.746h1.764c.264 0 .478.03.642.088.163.058.293.136.388.235.096.1.16.216.195.35a1.275 1.275 0 01.05.372c0 .163-.024.31-.073.44a.89.89 0 01-.214.34.881.881 0 01-.35.22c-.161.054-.356.081-.584.081H8.324V6.746z"/></svg>
+          Behance
+        </a>
+        <a href="https://www.buymeacoffee.com/shirish" target="_blank" style="text-decoration: none;">
           <img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=☕&slug=shirish&button_colour=BD5FFF&font_colour=ffffff&font_family=Cookie&outline_colour=000000&coffee_colour=FFDD00" height="32" />
+        </a>
+        <a href="https://www.patreon.com/cw/shirishsalve" target="_blank" class="social-link">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M0 .48v23.04h4.22V.48H0zm15.385 0c-4.756 0-8.611 3.855-8.611 8.611 0 4.753 3.855 8.608 8.611 8.608 4.753 0 8.608-3.855 8.608-8.608 0-4.756-3.855-8.611-8.608-8.611z"/></svg>
+          Patreon
         </a>
       </div>
     </footer>
@@ -346,8 +375,8 @@
 
   <div class="minimized-bar" id="minimized-expand-btn">
     <div style="display: flex; align-items: center; gap: 10px;">
-      <div class="logo-icon" style="width: 24px; height: 24px; font-size: 14px; margin-right: 0;">H</div>
-      <div style="font-size: 12px; font-weight: 500;">HTML to Figma <span style="opacity: 0.6; margin-left: 4px; font-size: 10px;">PRO</span></div>
+      <div class="logo-icon" style="width: 24px; height: 24px; font-size: 14px; margin-right: 0;">W</div>
+      <div style="font-size: 12px; font-weight: 500;">HTML.IO <span style="opacity: 0.6; margin-left: 4px; font-size: 10px;">PRO</span></div>
     </div>
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity: 0.7;"><path d="M5 15l7-7 7 7"></path></svg>
   </div>
@@ -795,7 +824,12 @@ function updateHistory(h) {
 window.addEventListener('message', e => {
   if (e.data.pluginMessage) {
     var m = e.data.pluginMessage;
-    if (m.type === 'session-id') { currentSessionId = m.sessionId; updateConfigDisplay(); }
+    if (m.type === 'session-id') {
+      currentSessionId = m.sessionId;
+      updateConfigDisplay();
+      // Load history once session is ready
+      parent.postMessage({ pluginMessage: { type: 'load-history' } }, '*');
+    }
     if (m.type === 'history-updated') updateHistory(m.history);
   }
 });
