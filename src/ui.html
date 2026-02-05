@@ -1,5 +1,7 @@
 <html>
-<head><title>HTML, Web & URL to Figma AI</title><style>
+<head>
+  <title>HTML, Web & URL to Figma AI</title>
+  <style>
     :root {
       --primary: #9333EA;
       --primary-hover: #A855F7;
@@ -378,180 +380,106 @@
 
 <script>
 // ===============================================
-// GLOBAL CONSTANTS & STATE
+// CORE SCRIPT - PRESERVED FROM ORIGINAL
 // ===============================================
+
+// Global variable to control detailed logging
 var detailedLogsEnabled = true;
 function debugLog(...args) { if (detailedLogsEnabled) console.log(...args); }
 
+// Global session ID (received from plugin)
 var currentSessionId = null;
-var eventSource = null;
-var sseConnected = false;
-var sseReconnectAttempts = 0;
-var maxReconnectAttempts = 5;
-var sseReconnectDelay = 3000;
 
+// Copy to clipboard function
+function copyToClipboard(text) {
+  var textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    document.execCommand('copy');
+    return true;
+  } catch (err) {
+    console.error('Copy failed:', err);
+    return false;
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
+// Server config
 var LOCAL_SERVER = 'http://localhost:3003';
 var PROD_SERVER = 'https://html-to-figma.onrender.com';
+var LOCAL_API_KEY = 'dev-key';
 var PROD_API_KEY = 'figma-team-2026';
+var MCP_SERVER_URL = null;
+var MCP_API_KEY = null;
+var serverDetected = false;
 var MCP_GITHUB_REPO = 'github:Floristeady/html-to-figma';
 
-var MCP_SERVER_URL = null;
-var serverDetected = false;
+// Auto-detect server
+function detectServer(callback) {
+  if (serverDetected) { if (callback) callback(); return; }
+  debugLog('[SERVER] Detecting server...');
+  updateConnectionDetails('Detecting server...');
+  var timeoutId = setTimeout(function() {
+    debugLog('[SERVER] Localhost timeout, using production');
+    MCP_SERVER_URL = PROD_SERVER; MCP_API_KEY = PROD_API_KEY;
+    serverDetected = true; updateServerBadge('prod');
+    updateConnectionDetails('Using production server');
+    if (callback) callback();
+  }, 1500);
+  fetch(LOCAL_SERVER + '/mcp-status', { method: 'GET' })
+    .then(function(response) {
+      if (response.ok) {
+        clearTimeout(timeoutId);
+        debugLog('[SERVER] Localhost detected, using local server');
+        MCP_SERVER_URL = LOCAL_SERVER; MCP_API_KEY = LOCAL_API_KEY;
+        serverDetected = true; updateServerBadge('local');
+        updateConnectionDetails('Using local server');
+        if (callback) callback();
+      } else { throw new Error('Not OK'); }
+    })
+    .catch(function(error) {
+      clearTimeout(timeoutId);
+      if (!serverDetected) {
+        debugLog('[SERVER] Localhost not available, using production');
+        MCP_SERVER_URL = PROD_SERVER; MCP_API_KEY = PROD_API_KEY;
+        serverDetected = true; updateServerBadge('prod');
+        updateConnectionDetails('Using production server');
+        if (callback) callback();
+      }
+    });
+}
+
+function updateServerBadge(type) {
+  var badge = document.getElementById('server-badge');
+  if (badge) {
+    badge.style.display = 'inline-block';
+    badge.className = 'server-badge ' + type;
+    badge.textContent = type === 'local' ? 'LOCAL' : 'PROD';
+  }
+}
+
+function generateClaudeCodeConfig() {
+  return JSON.stringify({ "mcpServers": { "figma-html-bridge": { "command": "npx", "args": ["-y", MCP_GITHUB_REPO], "env": { "FIGMA_SERVER_URL": PROD_SERVER, "FIGMA_SESSION_ID": currentSessionId || "YOUR_SESSION_ID", "API_KEY": PROD_API_KEY } } } }, null, 2);
+}
+
+function generateCursorConfig() {
+  return JSON.stringify({ "figma-html-bridge": { "command": "npx", "args": ["-y", MCP_GITHUB_REPO], "env": { "FIGMA_SERVER_URL": PROD_SERVER, "FIGMA_SESSION_ID": currentSessionId || "YOUR_SESSION_ID", "API_KEY": PROD_API_KEY } } }, null, 2);
+}
+
+function updateConfigDisplay() {
+  var claudeConfig = document.getElementById('claude-code-cmd');
+  var cursorConfig = document.getElementById('cursor-config-code');
+  if (claudeConfig) claudeConfig.textContent = generateClaudeCodeConfig();
+  if (cursorConfig) cursorConfig.textContent = generateCursorConfig();
+}
 
 // ===============================================
-// UI HANDLERS
-// ===============================================
-document.addEventListener('DOMContentLoaded', function() {
-  // Tab Switching
-  document.querySelectorAll('.tab').forEach(tab => {
-    tab.onclick = () => {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      tab.classList.add('active');
-      document.getElementById(tab.dataset.tab + '-tab').classList.add('active');
-    };
-  });
-
-  // Config Tab Switching
-  document.querySelectorAll('.config-tab').forEach(tab => {
-    tab.onclick = function() {
-      document.querySelectorAll('.config-tab').forEach(t => t.classList.remove('active'));
-      this.classList.add('active');
-      document.querySelectorAll('.config-content').forEach(c => c.classList.remove('active'));
-      document.getElementById(this.getAttribute('data-target')).classList.add('active');
-    };
-  });
-
-  // Toggle Config Panel
-  document.getElementById('mcp-config-btn').onclick = function() {
-    const panel = document.getElementById('mcp-config-panel');
-    if (panel.style.display === 'none') {
-      panel.style.display = 'block';
-      this.textContent = 'Hide Config';
-      detectServer(updateConfigDisplay);
-    } else {
-      panel.style.display = 'none';
-      this.textContent = 'Config';
-    }
-  };
-
-  // Copy buttons
-  document.getElementById('copy-claude-cmd').onclick = () => {
-    if (copyToClipboard(generateClaudeCodeConfig())) {
-      const b = document.getElementById('copy-claude-cmd');
-      b.textContent = 'Copied!';
-      setTimeout(() => b.textContent = 'Copy', 2000);
-    }
-  };
-  document.getElementById('copy-cursor-config').onclick = () => {
-    if (copyToClipboard(generateCursorConfig())) {
-      const b = document.getElementById('copy-cursor-config');
-      b.textContent = 'Copied!';
-      setTimeout(() => b.textContent = 'Copy', 2000);
-    }
-  };
-
-  // Conversion Logic (Paste)
-  document.getElementById('send-btn').onclick = async function() {
-    const html = document.getElementById('html-input').value;
-    if (!html.trim()) { alert('Please paste HTML.'); return; }
-    const btn = document.getElementById('send-btn');
-    const oldTxt = btn.innerHTML;
-    btn.disabled = true; btn.textContent = 'Processing...';
-    try {
-      var structure = simpleParseHTML(html);
-      await collectAndFetchImages(structure);
-      var detectedWidth = detectDesignWidthFromHTML(html);
-      var detectedRemBase = detectRootFontSize(html);
-
-      parent.postMessage({
-        pluginMessage: {
-          type: 'html-structure',
-          structure: structure,
-          detectedWidth: detectedWidth,
-          detectedRemBase: detectedRemBase,
-          sourceType: 'paste',
-          name: 'Pasted HTML'
-        }
-      }, '*');
-    } catch(e) { console.error(e); alert('Error parsing HTML');
-    } finally { btn.disabled = false; btn.innerHTML = oldTxt; }
-  };
-
-  // URL/Upload Import
-  let uploadedContent = null;
-  document.getElementById('url-import-btn').onclick = async () => {
-    let url = document.getElementById('url-input').value;
-    if (!url) return;
-    if (!url.startsWith('http')) url = 'https://' + url;
-    try {
-      const res = await fetch(url);
-      uploadedContent = await res.text();
-      document.getElementById('upload-convert-btn').disabled = false;
-      alert('Fetched successfully!');
-    } catch (e) { alert('CORS error. Please paste HTML code instead.'); }
-  };
-
-  document.getElementById('file-input').onchange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    document.getElementById('file-name').textContent = file.name;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      uploadedContent = ev.target.result;
-      document.getElementById('upload-convert-btn').disabled = false;
-    };
-    reader.readAsText(file);
-  };
-
-  document.getElementById('upload-convert-btn').onclick = async () => {
-    if (!uploadedContent) return;
-    const btn = document.getElementById('upload-convert-btn');
-    btn.disabled = true; btn.textContent = 'Processing...';
-    try {
-      var structure = simpleParseHTML(uploadedContent);
-      await collectAndFetchImages(structure);
-      parent.postMessage({ pluginMessage: {
-        type: 'html-structure', structure: structure,
-        name: 'Imported Webpage', sourceType: 'url'
-      } }, '*');
-    } finally { btn.disabled = false; btn.textContent = 'Convert Import'; }
-  };
-
-  // History Clear
-  document.getElementById('clear-history-btn').onclick = () => {
-    parent.postMessage({ pluginMessage: { type: 'clear-history' } }, '*');
-  };
-
-  // MCP Control
-  document.getElementById('mcp-switch').onchange = function() {
-    if (this.checked) {
-      updateSSEStatus('Connecting...', 'connecting');
-      startRealSSEConnection();
-      parent.postMessage({ pluginMessage: { type: 'start-mcp-monitoring' } }, '*');
-    } else {
-      updateSSEStatus('Disconnected', 'disconnected');
-      stopRealSSEConnection();
-      parent.postMessage({ pluginMessage: { type: 'stop-mcp-monitoring' } }, '*');
-    }
-  };
-
-  document.getElementById('test-broadcast-btn').onclick = () => {
-    parent.postMessage({ pluginMessage: { type: 'test-broadcast' } }, '*');
-  };
-
-  // Minimize Logic
-  const toggleMinimize = () => {
-    const isMinimized = !document.body.classList.contains('minimized');
-    document.body.classList.toggle('minimized', isMinimized);
-    parent.postMessage({ pluginMessage: { type: 'resize-plugin', minimized: isMinimized } }, '*');
-  };
-  document.getElementById('minimize-btn').onclick = toggleMinimize;
-  document.getElementById('minimized-expand-btn').onclick = toggleMinimize;
-});
-
-// ===============================================
-// HIGH-FIDELITY PARSING ENGINE (from .orig)
+// PARSING ENGINE - PRESERVED FROM ORIGINAL
 // ===============================================
 
 var UNSUPPORTED_CSS_PROPERTIES = [
@@ -566,7 +494,7 @@ var SUPPORTED_CONTENT = {
   '"📈"': '📈', '"📖"': '📖', '"★"': '★', '"•"': '•', '"→"': '→', '"←"': '←',
   '"▼"': '▼', '"▲"': '▲', '"✓"': '✓', '"✗"': '✗', '"💡"': '💡', '"🎯"': '🎯',
   '"📅"': '📅', '"🕐"': '🕐', '"⏱️"': '⏱️', '"📊"': '📊', '"📝"': '📝',
-  '"🏟️"': '🏟️', '"📍"': '📍', '"🏢"': '🏢', '""': '', '" "': ' '
+  '"🏟️"': '🏟️', '"📍"': '📍', '"🏢"': '🏢', '""': ''
 };
 
 function filterUnsupportedCSS(styles) {
@@ -575,9 +503,7 @@ function filterUnsupportedCSS(styles) {
     if (styles.hasOwnProperty(prop)) {
       if (prop === 'content') {
         var contentValue = styles[prop];
-        if (SUPPORTED_CONTENT.hasOwnProperty(contentValue)) {
-          filteredStyles[prop] = styles[prop];
-        }
+        if (SUPPORTED_CONTENT.hasOwnProperty(contentValue)) filteredStyles[prop] = styles[prop];
       } else if (UNSUPPORTED_CSS_PROPERTIES.indexOf(prop) === -1) {
         filteredStyles[prop] = styles[prop];
       }
@@ -600,13 +526,11 @@ function parseInlineStyles(styleStr, trackImportant) {
         var val = decl.substring(colonIdx + 1).trim();
         var isImportant = val.indexOf('!important') !== -1;
         if (isImportant) val = val.replace(/\s*!important\s*/gi, '').trim();
-        if (isImportant) importantStyles[prop] = val;
-        else styles[prop] = val;
+        if (isImportant) importantStyles[prop] = val; else styles[prop] = val;
         if (prop === 'font' && val) {
           var fontMatch = val.match(/(?:^|\s)(\d+(?:\.\d+)?(?:px|rem|em|pt|vh|vw|%)?)\s*(?:\/\s*[\d.]+(?:px|rem|em|%|[a-z]+)?)?\s+/i);
           if (fontMatch && !styles['font-size'] && !importantStyles['font-size']) {
-            if (isImportant) importantStyles['font-size'] = fontMatch[1];
-            else styles['font-size'] = fontMatch[1];
+            if (isImportant) importantStyles['font-size'] = fontMatch[1]; else styles['font-size'] = fontMatch[1];
           }
         }
       }
@@ -622,9 +546,7 @@ function parseInlineStyles(styleStr, trackImportant) {
 function isUnsupportedSelector(selector) {
   if (selector.charAt(0) === '@') return true;
   if (selector.includes(':hover') || selector.includes(':active') || selector.includes(':focus') ||
-      selector.includes(':nth-child') || selector.includes(':first-child') || selector.includes(':last-child')) {
-    return true;
-  }
+      selector.includes(':nth-child') || selector.includes(':first-child') || selector.includes(':last-child')) return true;
   return false;
 }
 
@@ -639,7 +561,7 @@ function isValidCSSSelector(selector) {
   if (/^[a-zA-Z][a-zA-Z0-9-]*$/.test(selector)) return true;
   if (selector.charAt(0) === '.' && selector.indexOf(' ') === -1) return true;
   if (selector.charAt(0) === '#') return true;
-  if (selector.indexOf(' ') !== -1 || selector.indexOf('>') !== -1) return true;
+  if (selector.indexOf(' ') !== -1) return true;
   if (selector.indexOf('::') !== -1) return true;
   return false;
 }
@@ -659,59 +581,49 @@ function extractCSS(htmlStr) {
     searchStr = searchStr.substring(styleEnd + 8);
   }
   if (!allCssText) return cssRules;
-  allCssText = allCssText.replace(/\/\*[\s\S]*?\*\//g, ''); // Remove comments
-
+  allCssText = allCssText.replace(/\/\*[\s\S]*?\*\//g, '');
   var rootMatch = allCssText.match(/:root\s*\{([^}]+)\}/);
   if (rootMatch) {
-    rootMatch[1].split(';').forEach(pair => {
+    rootMatch[1].split(';').forEach(function(pair) {
       var p = pair.trim();
-      if (p.startsWith('--')) {
+      if (p.indexOf('--') === 0) {
         var idx = p.indexOf(':');
         if (idx > 0) cssVariables[p.substring(0, idx).trim()] = p.substring(idx + 1).trim();
       }
     });
   }
-
   function resolveVariables(value) {
     if (!value || typeof value !== 'string') return value;
     return value.replace(/var\(([^)]+)\)/g, function(match, varRef) {
       var parts = varRef.split(',');
       var varName = parts[0].trim();
-      var fallback = parts[1] ? parts[1].trim() : null;
-      return cssVariables[varName] || fallback || match;
+      return cssVariables[varName] || (parts[1] ? parts[1].trim() : match);
     });
   }
-
   function removeAtRuleBlocks(css) {
-    var result = '';
-    var i = 0;
+    var result = '', i = 0;
     while (i < css.length) {
       if (css[i] === '@' && (css.substring(i, i + 6) === '@media' || css.substring(i, i + 10) === '@keyframes' || css.substring(i, i + 9) === '@supports')) {
-        var braceStart = css.indexOf('{', i);
-        if (braceStart === -1) { i = css.indexOf(';', i) + 1 || css.length; continue; }
-        var braceCount = 1, j = braceStart + 1;
-        while (j < css.length && braceCount > 0) {
-          if (css[j] === '{') braceCount++; else if (css[j] === '}') braceCount--;
-          j++;
-        }
+        var b = css.indexOf('{', i); if (b === -1) { i = css.indexOf(';', i) + 1 || css.length; continue; }
+        var c = 1, j = b + 1; while (j < css.length && c > 0) { if (css[j] === '{') c++; else if (css[j] === '}') c--; j++; }
         i = j;
       } else { result += css[i]; i++; }
     }
     return result;
   }
-
   allCssText = removeAtRuleBlocks(allCssText);
-  allCssText.split('}').forEach(rule => {
+  allCssText.split('}').forEach(function(rule) {
     var r = rule.trim();
     if (r) {
       var braceIdx = r.indexOf('{');
       if (braceIdx > 0) {
         var selector = r.substring(0, braceIdx).trim();
-        var declarations = resolveVariables(r.substring(braceIdx + 1).trim());
+        var declarations = r.substring(braceIdx + 1).trim();
         if (selector && declarations && !isUnsupportedSelector(selector)) {
-          parseComplexSelector(selector).forEach(singleSelector => {
-            if (isValidCSSSelector(singleSelector)) {
-              cssRules[singleSelector] = Object.assign({}, cssRules[singleSelector] || {}, parseInlineStyles(declarations));
+          parseComplexSelector(selector).forEach(function(s) {
+            if (isValidCSSSelector(s)) {
+              var resolved = resolveVariables(declarations);
+              cssRules[s] = Object.assign({}, cssRules[s] || {}, parseInlineStyles(resolved));
             }
           });
         }
@@ -745,47 +657,41 @@ function simpleParseHTML(htmlStr) {
     var className = element.getAttribute('class'), tagName = element.tagName.toLowerCase();
     var beforeContent = '', afterContent = '';
     if (className) {
-      className.split(' ').forEach(c => {
-        var bSel = '.' + c.trim() + '::before', aSel = '.' + c.trim() + '::after';
-        if (cssRules[bSel] && SUPPORTED_CONTENT[cssRules[bSel].content]) beforeContent = SUPPORTED_CONTENT[cssRules[bSel].content];
-        if (cssRules[aSel] && SUPPORTED_CONTENT[cssRules[aSel].content]) afterContent = SUPPORTED_CONTENT[cssRules[aSel].content];
+      className.split(' ').forEach(function(c) {
+        var b = '.' + c.trim() + '::before', a = '.' + c.trim() + '::after';
+        if (cssRules[b] && cssRules[b].content && SUPPORTED_CONTENT[cssRules[b].content]) beforeContent = SUPPORTED_CONTENT[cssRules[b].content];
+        if (cssRules[a] && cssRules[a].content && SUPPORTED_CONTENT[cssRules[a].content]) afterContent = SUPPORTED_CONTENT[cssRules[a].content];
       });
     }
-    if (!beforeContent && cssRules[tagName+'::before'] && SUPPORTED_CONTENT[cssRules[tagName+'::before'].content]) beforeContent = SUPPORTED_CONTENT[cssRules[tagName+'::before'].content];
-    if (!afterContent && cssRules[tagName+'::after'] && SUPPORTED_CONTENT[cssRules[tagName+'::after'].content]) afterContent = SUPPORTED_CONTENT[cssRules[tagName+'::after'].content];
     return { before: beforeContent, after: afterContent };
   }
 
   function calculateSpecificity(selector) {
-    var s = 0;
-    (selector.match(/#/g) || []).forEach(() => s += 100);
-    (selector.match(/\./g) || []).forEach(() => s += 10);
-    selector.split(/[\s>+~]+/).forEach(part => { if (part && !part.startsWith('.') && !part.startsWith('#')) s += 1; });
-    return s;
-  }
-
-  function getAllMatchingSelectors(element) {
-    var matching = [], tagName = element.tagName.toLowerCase(), id = element.getAttribute('id'), cls = element.getAttribute('class');
-    for (var sel in cssRules) {
-      if (sel.includes('::')) continue;
-      var isMatch = false;
-      if (sel === '*' || sel === tagName) isMatch = true;
-      else if (sel.startsWith('.') && cls && cls.includes(sel.substring(1))) isMatch = true;
-      else if (sel.startsWith('#') && id === sel.substring(1)) isMatch = true;
-      else { try { if (element.matches(sel)) isMatch = true; } catch(e) {} }
-      if (isMatch) matching.push({ selector: sel, specificity: calculateSpecificity(sel), styles: cssRules[sel] });
+    var specificity = 0;
+    for (var i = 0; i < selector.length; i++) {
+      if (selector[i] === '#') specificity += 100; else if (selector[i] === '.') specificity += 10;
     }
-    return matching.sort((a, b) => a.specificity - b.specificity);
+    return specificity || 1;
   }
 
   function getElementStyles(element) {
     var styles = {}, important = {};
-    getAllMatchingSelectors(element).forEach(m => {
-      for (var p in m.styles) {
-        if (m.styles[p].includes('!important')) important[p] = m.styles[p].replace(' !important', '');
-        else styles[p] = m.styles[p];
+    var tag = element.tagName.toLowerCase(), cls = element.getAttribute('class'), id = element.getAttribute('id');
+    for (var sel in cssRules) {
+      if (sel.includes('::')) continue;
+      var match = false;
+      if (sel === '*' || sel === tag) match = true;
+      else if (sel.startsWith('.') && cls && cls.includes(sel.substring(1))) match = true;
+      else if (sel.startsWith('#') && id === sel.substring(1)) match = true;
+      else { try { if (element.matches(sel)) match = true; } catch(e) {} }
+      if (match) {
+        for (var p in cssRules[sel]) {
+          var v = cssRules[sel][p];
+          if (typeof v === 'string' && v.includes('!important')) important[p] = v.replace(' !important', '');
+          else styles[p] = v;
+        }
       }
-    });
+    }
     var inline = parseInlineStyles(element.getAttribute('style'), true);
     return Object.assign(styles, inline.styles, important, inline.important);
   }
@@ -796,123 +702,202 @@ function simpleParseHTML(htmlStr) {
       if (['script', 'style', 'link', 'meta'].includes(tag)) return null;
       var styles = getElementStyles(node), children = [], mixed = [], pseudo = extractPseudoContent(node, cssRules);
       if (pseudo.before) mixed.push({ type: 'text', text: pseudo.before });
-      node.childNodes.forEach(c => {
+      for (var i = 0; i < node.childNodes.length; i++) {
+        var c = node.childNodes[i];
         if (c.nodeType === 3) {
-          var t = c.textContent.trim();
-          if (t) mixed.push({ type: 'text', text: t });
+          var t = c.textContent.trim(); if (t) mixed.push({ type: 'text', text: t });
         } else if (c.nodeType === 1) {
-          var struct = nodeToStruct(c);
-          if (struct) { children.push(struct); mixed.push({ type: 'element', node: struct }); }
+          var s = nodeToStruct(c); if (s) { children.push(s); mixed.push({ type: 'element', node: s }); }
         }
-      });
+      }
       if (pseudo.after) mixed.push({ type: 'text', text: pseudo.after });
       return {
         type: 'element', tagName: tag, text: node.innerText || '', styles: styles,
-        attributes: { src: node.getAttribute('src'), href: node.getAttribute('href'), alt: node.getAttribute('alt'), value: node.getAttribute('value'), placeholder: node.getAttribute('placeholder') },
-        children: children, mixedContent: mixed.length > 1 ? mixed : null, pseudoContent: pseudo
+        attributes: { src: node.getAttribute('src'), value: node.getAttribute('value'), placeholder: node.getAttribute('placeholder'), alt: node.getAttribute('alt'), rows: node.getAttribute('rows') },
+        children: children, mixedContent: mixed.length > 1 ? mixed : null
       };
     }
     return null;
   }
-  var bodyStruct = nodeToStruct(body);
-  return bodyStruct ? [bodyStruct] : [];
-}
-
-async function collectAndFetchImages(struct) {
-  async function traverse(nodes) {
-    if (!nodes) return;
-    for (let n of nodes) {
-      if (n.tagName === 'img' && n.attributes.src) {
-        try { let r = await fetch(n.attributes.src); n.imageData = Array.from(new Uint8Array(await r.arrayBuffer())); } catch(e) {}
-      }
-      if (n.children) await traverse(n.children);
-    }
-  }
-  await traverse(struct);
+  return [nodeToStruct(body)];
 }
 
 // ===============================================
-// AI BRIDGE (SSE)
+// UI LOGIC - UPDATED FOR MODERN INTERFACE
 // ===============================================
-function startRealSSEConnection() {
-  if (eventSource) eventSource.close();
-  if (!currentSessionId) { setTimeout(startRealSSEConnection, 500); return; }
-  detectServer(() => {
-    var url = MCP_SERVER_URL + '/mcp-stream?sessionId=' + encodeURIComponent(currentSessionId);
-    eventSource = new EventSource(url);
-    eventSource.onopen = () => { sseConnected = true; updateSSEStatus('SSE Connected', 'connected'); parent.postMessage({ pluginMessage: { type: 'sse-connected' } }, '*'); };
-    eventSource.onmessage = (e) => {
-       var data = JSON.parse(e.data);
-       if (data.type === 'mcp-request' && data.function === 'figma_html_bridge_import') {
-          updateMCPStatus('Processing...', 'connecting');
-          try {
-            var s = simpleParseHTML(data.arguments.html);
-            parent.postMessage({ pluginMessage: { type: 'html-structure', structure: s, name: data.arguments.name || 'AI Import', fromMCP: true, requestId: data.requestId } }, '*');
-            updateMCPStatus('Success', 'success');
-          } catch(err) { updateMCPStatus('Error', 'error'); }
-       }
+
+document.addEventListener('DOMContentLoaded', function() {
+  detectServer();
+
+  // Tab switching
+  document.querySelectorAll('.tab').forEach(function(tab) {
+    tab.onclick = function() {
+      document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+      document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.tab + '-tab').classList.add('active');
     };
-    eventSource.onerror = () => { sseConnected = false; updateSSEStatus('SSE Disconnected', 'error'); };
   });
-}
 
-function stopRealSSEConnection() { if (eventSource) { eventSource.close(); eventSource = null; } sseConnected = false; }
-
-function detectServer(cb) {
-  if (serverDetected) { cb(); return; }
-  var tid = setTimeout(() => { MCP_SERVER_URL = PROD_SERVER; serverDetected = true; updateServerBadge('prod'); cb(); }, 1500);
-  fetch(LOCAL_SERVER + '/mcp-status').then(r => { if (r.ok) { clearTimeout(tid); MCP_SERVER_URL = LOCAL_SERVER; serverDetected = true; updateServerBadge('local'); cb(); } else throw 1; }).catch(() => { if (!serverDetected) { clearTimeout(tid); MCP_SERVER_URL = PROD_SERVER; serverDetected = true; updateServerBadge('prod'); cb(); } });
-}
-
-function updateSSEStatus(t, s) {
-  var ind = document.getElementById('sse-indicator');
-  var txt = document.getElementById('sse-status-text');
-  if (txt) txt.textContent = t;
-  if (ind) ind.className = 'status-icon ' + s;
-}
-
-function updateMCPStatus(t, s) {
-  var ind = document.getElementById('mcp-indicator');
-  var txt = document.getElementById('mcp-status-text');
-  if (txt) txt.textContent = t;
-  if (ind) ind.className = 'status-icon ' + s;
-}
-
-function updateConfigDisplay() {
-  document.getElementById('claude-code-cmd').textContent = generateClaudeCodeConfig();
-  document.getElementById('cursor-config-code').textContent = generateCursorConfig();
-}
-
-function generateClaudeCodeConfig() { return JSON.stringify({ mcpServers: { "figma-html-bridge": { command: "npx", args: ["-y", MCP_GITHUB_REPO], env: { FIGMA_SERVER_URL: PROD_SERVER, FIGMA_SESSION_ID: currentSessionId || "ID", API_KEY: PROD_API_KEY } } } }, null, 2); }
-function generateCursorConfig() { return JSON.stringify({ "figma-html-bridge": { command: "npx", args: ["-y", MCP_GITHUB_REPO], env: { FIGMA_SERVER_URL: PROD_SERVER, FIGMA_SESSION_ID: currentSessionId || "ID", API_KEY: PROD_API_KEY } } }, null, 2); }
-
-function copyToClipboard(t) {
-  var a = document.createElement('textarea'); a.value = t; a.style.position = 'fixed'; a.style.opacity = '0'; document.body.appendChild(a); a.select();
-  try { document.execCommand('copy'); return true; } catch(e) { return false; } finally { document.body.removeChild(a); }
-}
-
-function updateHistory(h) {
-  var list = document.getElementById('recent-list'); if (!list) return;
-  if (!h || h.length === 0) { list.innerHTML = '<div style="font-size: 12px; color: var(--text-secondary); font-style: italic; padding: 12px; text-align: center;">No history found</div>'; return; }
-  list.innerHTML = '';
-  h.forEach(i => {
-    var d = document.createElement('div'); d.className = 'history-item';
-    d.innerHTML = '<div><div style="font-weight: 600; font-size: 13px;">'+i.name+'</div><div style="font-size: 10px; color: var(--text-secondary); margin-top: 2px;">'+i.type.toUpperCase()+' • '+new Date(i.timestamp).toLocaleTimeString()+'</div></div>';
-    list.appendChild(d);
-  });
-}
-
-window.addEventListener('message', e => {
-  if (e.data.pluginMessage) {
-    var m = e.data.pluginMessage;
-    if (m.type === 'session-id') {
-      currentSessionId = m.sessionId;
-      updateConfigDisplay();
-      parent.postMessage({ pluginMessage: { type: 'load-history' } }, '*');
+  // Config panel toggle
+  document.getElementById('mcp-config-btn').onclick = function() {
+    var p = document.getElementById('mcp-config-panel');
+    if (p.style.display === 'none') {
+      p.style.display = 'block'; this.textContent = 'Hide Config'; updateConfigDisplay();
+    } else {
+      p.style.display = 'none'; this.textContent = 'Config';
     }
-    if (m.type === 'history-updated') updateHistory(m.history);
-  }
+  };
+
+  // Config tab switching
+  document.querySelectorAll('.config-tab').forEach(function(tab) {
+    tab.onclick = function() {
+      document.querySelectorAll('.config-tab').forEach(function(t) { t.classList.remove('active'); });
+      document.querySelectorAll('.config-content').forEach(function(c) { c.classList.remove('active'); });
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.target).classList.add('active');
+    };
+  });
+
+  // Copy buttons
+  document.getElementById('copy-claude-cmd').onclick = function() {
+    if (copyToClipboard(generateClaudeCodeConfig())) {
+      var b = this; b.textContent = 'Copied!'; b.classList.add('copied');
+      setTimeout(function() { b.textContent = 'Copy'; b.classList.remove('copied'); }, 2000);
+    }
+  };
+  document.getElementById('copy-cursor-config').onclick = function() {
+    if (copyToClipboard(generateCursorConfig())) {
+      var b = this; b.textContent = 'Copied!'; b.classList.add('copied');
+      setTimeout(function() { b.textContent = 'Copy'; b.classList.remove('copied'); }, 2000);
+    }
+  };
+
+  // Convert Paste button
+  document.getElementById('send-btn').onclick = function() {
+    var val = document.getElementById('html-input').value;
+    if (!val.trim()) { alert('Please paste HTML.'); return; }
+    var structure = simpleParseHTML(val);
+    parent.postMessage({ pluginMessage: {
+      type: 'html-structure', structure: structure,
+      detectedWidth: detectDesignWidthFromHTML(val),
+      detectedRemBase: detectRootFontSize(val),
+      sourceType: 'paste', name: 'Pasted HTML'
+    } }, '*');
+  };
+
+  // URL Import button
+  var uploadedContent = null;
+  document.getElementById('url-import-btn').onclick = function() {
+    var url = document.getElementById('url-input').value;
+    if (!url) return;
+    if (!url.startsWith('http')) url = 'https://' + url;
+    updateConnectionDetails('Fetching ' + url + '...');
+    fetch(url).then(function(r) { return r.text(); }).then(function(text) {
+      uploadedContent = text;
+      document.getElementById('upload-convert-btn').disabled = false;
+      updateConnectionDetails('Fetched successfully!');
+    }).catch(function(e) {
+      alert('CORS limitation: Please paste the HTML code directly into the "Paste HTML" tab if fetch fails.');
+      updateConnectionDetails('Fetch failed');
+    });
+  };
+
+  // File input
+  document.getElementById('file-input').onchange = function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    document.getElementById('file-name').textContent = file.name;
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      uploadedContent = ev.target.result;
+      document.getElementById('upload-convert-btn').disabled = false;
+    };
+    reader.readAsText(file);
+  };
+
+  // Convert Upload/URL button
+  document.getElementById('upload-convert-btn').onclick = function() {
+    if (!uploadedContent) return;
+    var structure = simpleParseHTML(uploadedContent);
+    parent.postMessage({ pluginMessage: {
+      type: 'html-structure', structure: structure,
+      name: 'Imported Page', sourceType: 'url'
+    } }, '*');
+  };
+
+  // Clear history
+  document.getElementById('clear-history-btn').onclick = function() {
+    parent.postMessage({ pluginMessage: { type: 'clear-history' } }, '*');
+  };
+
+  // MCP Control
+  document.getElementById('mcp-switch').onchange = function() {
+    if (this.checked) {
+      updateSSEStatus('Connecting...', 'connecting');
+      parent.postMessage({ pluginMessage: { type: 'start-sse' } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'start-mcp-monitoring' } }, '*');
+    } else {
+      updateSSEStatus('Disconnected', 'disconnected');
+      parent.postMessage({ pluginMessage: { type: 'stop-sse' } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'stop-mcp-monitoring' } }, '*');
+    }
+  };
+
+  // Test Connection
+  document.getElementById('test-broadcast-btn').onclick = function() {
+    parent.postMessage({ pluginMessage: { type: 'test-broadcast' } }, '*');
+  };
+
+  // Minimize logic
+  var toggleMinimize = function() {
+    var isMin = !document.body.classList.contains('minimized');
+    document.body.classList.toggle('minimized', isMin);
+    parent.postMessage({ pluginMessage: { type: 'resize-plugin', minimized: isMin } }, '*');
+  };
+  document.getElementById('minimize-btn').onclick = toggleMinimize;
+  document.getElementById('minimized-expand-btn').onclick = toggleMinimize;
 });
+
+// SSE Status Updates
+function updateSSEStatus(t, s) {
+  var ind = document.getElementById('sse-indicator'), txt = document.getElementById('sse-status-text');
+  if (txt) txt.textContent = t;
+  if (ind) ind.className = 'status-icon ' + s;
+}
+function updateMCPStatus(t, s) {
+  var ind = document.getElementById('mcp-indicator'), txt = document.getElementById('mcp-status-text');
+  if (txt) txt.textContent = t;
+  if (ind) ind.className = 'status-icon ' + s;
+}
+function updateConnectionDetails(t) { var d = document.getElementById('connection-details'); if (d) d.textContent = t; }
+
+function updateHistory(history) {
+  var list = document.getElementById('recent-list'); if (!list) return;
+  if (!history || history.length === 0) { list.innerHTML = '<div style="font-size: 12px; color: var(--text-secondary); font-style: italic; padding: 12px; text-align: center;">No history found</div>'; return; }
+  list.innerHTML = '';
+  history.forEach(function(item) {
+    var div = document.createElement('div'); div.className = 'history-item';
+    div.innerHTML = '<div><div style="font-weight: 600; font-size: 13px;">' + item.name + '</div><div style="font-size: 10px; color: var(--text-secondary); margin-top: 2px;">' + item.type.toUpperCase() + ' • ' + new Date(item.timestamp).toLocaleTimeString() + '</div></div>';
+    list.appendChild(div);
+  });
+}
+
+window.onmessage = function(event) {
+  var msg = event.data.pluginMessage;
+  if (msg.type === 'session-id') {
+    currentSessionId = msg.sessionId; updateConfigDisplay();
+    parent.postMessage({ pluginMessage: { type: 'load-history' } }, '*');
+  }
+  if (msg.type === 'history-updated') updateHistory(msg.history);
+  if (msg.type === 'parse-mcp-html') {
+    var struct = simpleParseHTML(msg.html);
+    parent.postMessage({ pluginMessage: { type: 'html-structure', structure: struct, name: msg.name, fromMCP: true } }, '*');
+  }
+  if (msg.type === 'sse-connected') updateSSEStatus('SSE Connected', 'connected');
+  if (msg.type === 'sse-disconnected') updateSSEStatus('SSE Disconnected', 'disconnected');
+};
+
 </script>
 </body>
 </html>

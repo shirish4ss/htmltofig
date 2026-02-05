@@ -681,7 +681,7 @@
   }
 
   // src/code.ts
-  figma.showUI(__html__, { width: 480, height: 740 });
+  figma.showUI(__html__, { width: 360, height: 380 });
   function generateSessionId() {
     const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
     let result = "user_";
@@ -703,35 +703,6 @@
     return sessionId;
   }
   initializeSessionId();
-  var HISTORY_KEY = "import-history-v2";
-  async function getHistory() {
-    try {
-      const history = await figma.clientStorage.getAsync(HISTORY_KEY);
-      return history || [];
-    } catch (e) {
-      return [];
-    }
-  }
-  async function addToHistory(name, type) {
-    const history = await getHistory();
-    const newItem = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: name || "Untitled Import",
-      type,
-      // 'paste', 'url', 'mcp'
-      timestamp: Date.now()
-    };
-    const filteredHistory = history.filter((item) => item.name !== name);
-    const newHistory = [newItem, ...filteredHistory].slice(0, 10);
-    await figma.clientStorage.setAsync(HISTORY_KEY, newHistory);
-    figma.ui.postMessage({ type: "history-updated", history: newHistory });
-  }
-  async function deleteHistoryItem(id) {
-    const history = await getHistory();
-    const newHistory = history.filter((item) => item.id !== id);
-    await figma.clientStorage.setAsync(HISTORY_KEY, newHistory);
-    figma.ui.postMessage({ type: "history-updated", history: newHistory });
-  }
   function calculatePercentageWidth(widthValue, parentFrame) {
     if (!parentFrame || !widthValue) return null;
     const percentage = parsePercentage(widthValue);
@@ -2504,29 +2475,16 @@
           const height = parseSize((_Bc = node.styles) == null ? void 0 : _Bc.height) || 150;
           const frame = figma.createFrame();
           frame.resize(width, height);
+          frame.fills = [{ type: "SOLID", color: { r: 0.9, g: 0.9, b: 0.9 } }];
           frame.name = "Image: " + (((_Cc = node.attributes) == null ? void 0 : _Cc.alt) || "Unnamed");
-          if (node.imageData) {
-            try {
-              const image = figma.createImage(new Uint8Array(node.imageData));
-              frame.fills = [{
-                type: "IMAGE",
-                imageHash: image.hash,
-                scaleMode: "FILL"
-              }];
-            } catch (e) {
-              frame.fills = [{ type: "SOLID", color: { r: 0.9, g: 0.9, b: 0.9 } }];
-            }
-          } else {
-            frame.fills = [{ type: "SOLID", color: { r: 0.9, g: 0.9, b: 0.9 } }];
-            frame.layoutMode = "HORIZONTAL";
-            frame.primaryAxisAlignItems = "CENTER";
-            frame.counterAxisAlignItems = "CENTER";
-            await figma.loadFontAsync({ family: "Inter", style: "Regular" });
-            const placeholderText = figma.createText();
-            placeholderText.characters = ((_Dc = node.attributes) == null ? void 0 : _Dc.alt) || "Image";
-            placeholderText.fills = [{ type: "SOLID", color: { r: 0.5, g: 0.5, b: 0.5 } }];
-            frame.appendChild(placeholderText);
-          }
+          frame.layoutMode = "HORIZONTAL";
+          frame.primaryAxisAlignItems = "CENTER";
+          frame.counterAxisAlignItems = "CENTER";
+          await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+          const placeholderText = figma.createText();
+          placeholderText.characters = ((_Dc = node.attributes) == null ? void 0 : _Dc.alt) || "Image";
+          placeholderText.fills = [{ type: "SOLID", color: { r: 0.5, g: 0.5, b: 0.5 } }];
+          frame.appendChild(placeholderText);
           if (!parentFrame) {
             frame.x = startX;
             frame.y = startY;
@@ -2829,24 +2787,12 @@
       testMCPConnection();
       return;
     }
-    if (msg.type === "load-history") {
-      const history = await getHistory();
-      figma.ui.postMessage({ type: "history-updated", history });
-      return;
-    }
-    if (msg.type === "clear-history") {
-      await figma.clientStorage.setAsync(HISTORY_KEY, []);
-      figma.ui.postMessage({ type: "history-updated", history: [] });
-      return;
-    }
-    if (msg.type === "delete-history-item") {
-      await deleteHistoryItem(msg.id);
-      return;
-    }
     if (msg.type === "resize-plugin") {
-      const width = msg.width || 480;
-      const height = msg.height || (msg.minimized ? 40 : 740);
-      figma.ui.resize(width, height);
+      if (msg.minimized) {
+        figma.ui.resize(360, 40);
+      } else {
+        figma.ui.resize(360, 380);
+      }
       return;
     }
     if (msg.type === "store-mcp-data") {
@@ -2925,8 +2871,6 @@
       console.log("[HTML] \u2705 Conversion completed");
       figma.currentPage.selection = [mainContainer];
       figma.viewport.scrollAndZoomIntoView([mainContainer]);
-      const importType = msg.fromMCP ? "mcp" : msg.sourceType || "paste";
-      await addToHistory(msg.name || "Web Page", importType);
       figma.notify("\u2705 HTML converted successfully!");
     }
     if (msg.type === "start-mcp-monitoring") {
@@ -2940,9 +2884,31 @@
     if (msg.type === "sse-connected") {
       sseConnected = true;
       sseLastSuccessTimestamp = Date.now();
+      console.log("[SSE] \u{1F7E2} Connected");
     }
     if (msg.type === "sse-disconnected") {
       sseConnected = false;
+      console.log("[SSE] \u{1F534} Disconnected");
+    }
+    if (msg.type === "sse-message-processed") {
+      sseLastSuccessTimestamp = msg.timestamp || Date.now();
+      debugLog("[MCP] \u{1F4E1} SSE message processed, timestamp updated");
+    }
+    if (msg.type === "sse-processing-timestamp") {
+      sseLastSuccessTimestamp = msg.timestamp;
+      debugLog("[MCP] \u{1F3AF} SSE processing timestamp - fallback blocked");
+    }
+    if (msg.type === "start-sse") {
+      debugLog("[SSE] Starting SSE connection from UI...");
+      figma.ui.postMessage({
+        type: "start-sse-connection"
+      });
+    }
+    if (msg.type === "stop-sse") {
+      debugLog("[SSE] Stopping SSE connection from UI...");
+      figma.ui.postMessage({
+        type: "stop-sse-connection"
+      });
     }
     if (msg.type === "test-broadcast") {
       debugLog("[SSE] Connection test requested from UI...");

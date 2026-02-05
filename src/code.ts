@@ -10,7 +10,7 @@ import { parseBoxShadow, parseTransform, parseLinearGradient, parseFilter, parse
 import { parseGridColumns, parseGridTemplateAreas, getGridRowCount, getGridColCount, parseGridColumnWidths } from './utils/grid';
 
 // __html__ is injected by Figma when using a separate ui.html file
-figma.showUI(__html__, { width: 480, height: 740 });
+figma.showUI(__html__, { width: 360, height: 380 });
 
 // ==========================================
 // SESSION ID MANAGEMENT
@@ -48,44 +48,6 @@ async function initializeSessionId(): Promise<string> {
 
 // Initialize session ID when plugin loads
 initializeSessionId();
-
-// ==========================================
-// HISTORY MANAGEMENT
-// ==========================================
-const HISTORY_KEY = 'import-history-v2';
-
-async function getHistory() {
-  try {
-    const history = await figma.clientStorage.getAsync(HISTORY_KEY);
-    return history || [];
-  } catch (e) {
-    return [];
-  }
-}
-
-async function addToHistory(name: string, type: string) {
-  const history = await getHistory();
-  const newItem = {
-    id: Math.random().toString(36).substr(2, 9),
-    name: name || 'Untitled Import',
-    type: type, // 'paste', 'url', 'mcp'
-    timestamp: Date.now()
-  };
-
-  // Remove duplicates with same name and keep last 10
-  const filteredHistory = history.filter((item: any) => item.name !== name);
-  const newHistory = [newItem, ...filteredHistory].slice(0, 10);
-
-  await figma.clientStorage.setAsync(HISTORY_KEY, newHistory);
-  figma.ui.postMessage({ type: 'history-updated', history: newHistory });
-}
-
-async function deleteHistoryItem(id: string) {
-  const history = await getHistory();
-  const newHistory = history.filter((item: any) => item.id !== id);
-  await figma.clientStorage.setAsync(HISTORY_KEY, newHistory);
-  figma.ui.postMessage({ type: 'history-updated', history: newHistory });
-}
 
 // Color utilities imported from ./utils/colors
 // CSS unit utilities (CSS_CONFIG, parseSize, parseCalc, parsePercentage, parseMargin, parsePadding)
@@ -569,7 +531,7 @@ function applyStylesToFrame(frame: FrameNode, styles: any) {
         type: 'LAYER_BLUR',
         radius: filter.blur,
         visible: true
-      } as any);
+      });
     }
 
     // Apply drop shadow from filter
@@ -600,7 +562,7 @@ function applyStylesToFrame(frame: FrameNode, styles: any) {
         type: 'BACKGROUND_BLUR',
         radius: backdropFilter.blur,
         visible: true
-      } as any);
+      });
       frame.effects = effects;
     }
   }
@@ -2688,34 +2650,20 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
 
         const frame = figma.createFrame();
         frame.resize(width, height);
+        frame.fills = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }];
         frame.name = 'Image: ' + (node.attributes?.alt || 'Unnamed');
 
-        if (node.imageData) {
-          try {
-            const image = figma.createImage(new Uint8Array(node.imageData));
-            frame.fills = [{
-              type: 'IMAGE',
-              imageHash: image.hash,
-              scaleMode: 'FILL'
-            }];
-          } catch (e) {
-            frame.fills = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }];
-          }
-        } else {
-          frame.fills = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }];
+        // Center the placeholder text
+        frame.layoutMode = 'HORIZONTAL';
+        frame.primaryAxisAlignItems = 'CENTER';
+        frame.counterAxisAlignItems = 'CENTER';
 
-          // Center the placeholder text
-          frame.layoutMode = 'HORIZONTAL';
-          frame.primaryAxisAlignItems = 'CENTER';
-          frame.counterAxisAlignItems = 'CENTER';
-
-          // Add placeholder text
-          await figma.loadFontAsync({ family: "Inter", style: "Regular" });
-          const placeholderText = figma.createText();
-          placeholderText.characters = node.attributes?.alt || 'Image';
-          placeholderText.fills = [{ type: 'SOLID', color: { r: 0.5, g: 0.5, b: 0.5 } }];
-          frame.appendChild(placeholderText);
-        }
+        // Add placeholder text
+        await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+        const placeholderText = figma.createText();
+        placeholderText.characters = node.attributes?.alt || 'Image';
+        placeholderText.fills = [{ type: 'SOLID', color: { r: 0.5, g: 0.5, b: 0.5 } }];
+        frame.appendChild(placeholderText);
 
         if (!parentFrame) {
           frame.x = startX;
@@ -3157,29 +3105,13 @@ figma.ui.onmessage = async (msg) => {
     return;
   }
 
-  // History Management
-  if (msg.type === 'load-history') {
-    const history = await getHistory();
-    figma.ui.postMessage({ type: 'history-updated', history });
-    return;
-  }
-
-  if (msg.type === 'clear-history') {
-    await figma.clientStorage.setAsync(HISTORY_KEY, []);
-    figma.ui.postMessage({ type: 'history-updated', history: [] });
-    return;
-  }
-
-  if (msg.type === 'delete-history-item') {
-    await deleteHistoryItem(msg.id);
-    return;
-  }
-
   // Handle minimize/expand resize
   if (msg.type === 'resize-plugin') {
-    const width = msg.width || 480;
-    const height = msg.height || (msg.minimized ? 40 : 740);
-    figma.ui.resize(width, height);
+    if (msg.minimized) {
+      figma.ui.resize(360, 40);
+    } else {
+      figma.ui.resize(360, 380);
+    }
     return;
   }
 
@@ -3298,10 +3230,6 @@ figma.ui.onmessage = async (msg) => {
     figma.currentPage.selection = [mainContainer];
     figma.viewport.scrollAndZoomIntoView([mainContainer]);
 
-    // Add to history
-    const importType = msg.fromMCP ? 'mcp' : (msg.sourceType || 'paste');
-    await addToHistory(msg.name || 'Web Page', importType);
-
     figma.notify('✅ HTML converted successfully!');
   }
 
@@ -3318,14 +3246,45 @@ figma.ui.onmessage = async (msg) => {
     figma.notify('⏹️ MCP Monitoring detenido');
   }
 
-  // SSE Status Updates from UI
+  // NEW: SSE Status Updates from UI
   if (msg.type === 'sse-connected') {
     sseConnected = true;
     sseLastSuccessTimestamp = Date.now();
+    console.log('[SSE] 🟢 Connected');
   }
 
   if (msg.type === 'sse-disconnected') {
     sseConnected = false;
+    console.log('[SSE] 🔴 Disconnected');
+  }
+
+  if (msg.type === 'sse-message-processed') {
+    sseLastSuccessTimestamp = msg.timestamp || Date.now();
+    debugLog('[MCP] 📡 SSE message processed, timestamp updated');
+  }
+
+  if (msg.type === 'sse-processing-timestamp') {
+    // SSE is actively processing this timestamp - mark it to prevent fallback
+    sseLastSuccessTimestamp = msg.timestamp;
+    debugLog('[MCP] 🎯 SSE processing timestamp - fallback blocked');
+  }
+
+  // NEW UI ELEMENT HANDLERS
+  // SSE HANDLERS - Properly integrated
+  if (msg.type === 'start-sse') {
+    debugLog('[SSE] Starting SSE connection from UI...');
+    // Start actual SSE connection
+    figma.ui.postMessage({
+      type: 'start-sse-connection'
+    });
+  }
+
+  if (msg.type === 'stop-sse') {
+    debugLog('[SSE] Stopping SSE connection from UI...');
+    // Stop actual SSE connection
+    figma.ui.postMessage({
+      type: 'stop-sse-connection'
+    });
   }
 
   if (msg.type === 'test-broadcast') {
