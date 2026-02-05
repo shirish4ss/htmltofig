@@ -10,7 +10,7 @@ import { parseBoxShadow, parseTransform, parseLinearGradient, parseFilter, parse
 import { parseGridColumns, parseGridTemplateAreas, getGridRowCount, getGridColCount, parseGridColumnWidths } from './utils/grid';
 
 // __html__ is injected by Figma when using a separate ui.html file
-figma.showUI(__html__, { width: 360, height: 380 });
+figma.showUI(__html__, { width: 480, height: 740 });
 
 // ==========================================
 // SESSION ID MANAGEMENT
@@ -529,6 +529,7 @@ function applyStylesToFrame(frame: FrameNode, styles: any) {
     if (filter.blur !== undefined && filter.blur > 0) {
       effects.push({
         type: 'LAYER_BLUR',
+        blurType: 'NORMAL',
         radius: filter.blur,
         visible: true
       });
@@ -560,6 +561,7 @@ function applyStylesToFrame(frame: FrameNode, styles: any) {
       const effects: Effect[] = [...(frame.effects || [])];
       effects.push({
         type: 'BACKGROUND_BLUR',
+        blurType: 'NORMAL',
         radius: backdropFilter.blur,
         visible: true
       });
@@ -3108,9 +3110,9 @@ figma.ui.onmessage = async (msg) => {
   // Handle minimize/expand resize
   if (msg.type === 'resize-plugin') {
     if (msg.minimized) {
-      figma.ui.resize(360, 40);
+      figma.ui.resize(480, 40);
     } else {
-      figma.ui.resize(360, 380);
+      figma.ui.resize(480, 740);
     }
     return;
   }
