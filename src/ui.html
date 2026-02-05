@@ -380,17 +380,16 @@
 
 <script>
 // ===============================================
-// CORE SCRIPT - PRESERVED FROM ORIGINAL
+// CORE SCRIPT - ABSOLUTELY PRESERVED FROM ORIGINAL
 // ===============================================
 
 // Global variable to control detailed logging
 var detailedLogsEnabled = true;
-function debugLog(...args) { if (detailedLogsEnabled) console.log(...args); }
 
 // Global session ID (received from plugin)
 var currentSessionId = null;
 
-// Copy to clipboard function
+// Copy to clipboard function (works in Figma plugin context)
 function copyToClipboard(text) {
   var textarea = document.createElement('textarea');
   textarea.value = text;
@@ -409,51 +408,71 @@ function copyToClipboard(text) {
   }
 }
 
-// Server config
+// MCP Config - Auto-detect server (localhost first, then production)
 var LOCAL_SERVER = 'http://localhost:3003';
 var PROD_SERVER = 'https://html-to-figma.onrender.com';
 var LOCAL_API_KEY = 'dev-key';
 var PROD_API_KEY = 'figma-team-2026';
+
+// Will be set after detection
 var MCP_SERVER_URL = null;
 var MCP_API_KEY = null;
 var serverDetected = false;
+
 var MCP_GITHUB_REPO = 'github:Floristeady/html-to-figma';
 
-// Auto-detect server
+// Auto-detect which server to use
 function detectServer(callback) {
-  if (serverDetected) { if (callback) callback(); return; }
+  if (serverDetected) {
+    if (callback) callback();
+    return;
+  }
+
   debugLog('[SERVER] Detecting server...');
   updateConnectionDetails('Detecting server...');
+
+  // Try localhost first with a short timeout
   var timeoutId = setTimeout(function() {
+    // Timeout - localhost not responding, use production
     debugLog('[SERVER] Localhost timeout, using production');
-    MCP_SERVER_URL = PROD_SERVER; MCP_API_KEY = PROD_API_KEY;
-    serverDetected = true; updateServerBadge('prod');
+    MCP_SERVER_URL = PROD_SERVER;
+    MCP_API_KEY = PROD_API_KEY;
+    serverDetected = true;
+    updateServerBadge('prod');
     updateConnectionDetails('Using production server');
     if (callback) callback();
   }, 1500);
+
   fetch(LOCAL_SERVER + '/mcp-status', { method: 'GET' })
     .then(function(response) {
       if (response.ok) {
         clearTimeout(timeoutId);
         debugLog('[SERVER] Localhost detected, using local server');
-        MCP_SERVER_URL = LOCAL_SERVER; MCP_API_KEY = LOCAL_API_KEY;
-        serverDetected = true; updateServerBadge('local');
+        MCP_SERVER_URL = LOCAL_SERVER;
+        MCP_API_KEY = LOCAL_API_KEY;
+        serverDetected = true;
+        updateServerBadge('local');
         updateConnectionDetails('Using local server');
         if (callback) callback();
-      } else { throw new Error('Not OK'); }
+      } else {
+        throw new Error('Not OK');
+      }
     })
     .catch(function(error) {
       clearTimeout(timeoutId);
       if (!serverDetected) {
         debugLog('[SERVER] Localhost not available, using production');
-        MCP_SERVER_URL = PROD_SERVER; MCP_API_KEY = PROD_API_KEY;
-        serverDetected = true; updateServerBadge('prod');
+        MCP_SERVER_URL = PROD_SERVER;
+        MCP_API_KEY = PROD_API_KEY;
+        serverDetected = true;
+        updateServerBadge('prod');
         updateConnectionDetails('Using production server');
         if (callback) callback();
       }
     });
 }
 
+// Update server badge display
 function updateServerBadge(type) {
   var badge = document.getElementById('server-badge');
   if (badge) {
@@ -463,32 +482,67 @@ function updateServerBadge(type) {
   }
 }
 
+// Generate Claude Code config JSON for ~/.claude.json (with mcpServers wrapper)
 function generateClaudeCodeConfig() {
-  return JSON.stringify({ "mcpServers": { "figma-html-bridge": { "command": "npx", "args": ["-y", MCP_GITHUB_REPO], "env": { "FIGMA_SERVER_URL": PROD_SERVER, "FIGMA_SESSION_ID": currentSessionId || "YOUR_SESSION_ID", "API_KEY": PROD_API_KEY } } } }, null, 2);
+  return JSON.stringify({
+    "mcpServers": {
+      "figma-html-bridge": {
+        "command": "npx",
+        "args": ["-y", MCP_GITHUB_REPO],
+        "env": {
+          "FIGMA_SERVER_URL": PROD_SERVER,
+          "FIGMA_SESSION_ID": currentSessionId || "YOUR_SESSION_ID",
+          "API_KEY": PROD_API_KEY
+        }
+      }
+    }
+  }, null, 2);
 }
 
+// Generate Cursor/Desktop config JSON for ~/.cursor/mcp.json (without wrapper)
 function generateCursorConfig() {
-  return JSON.stringify({ "figma-html-bridge": { "command": "npx", "args": ["-y", MCP_GITHUB_REPO], "env": { "FIGMA_SERVER_URL": PROD_SERVER, "FIGMA_SESSION_ID": currentSessionId || "YOUR_SESSION_ID", "API_KEY": PROD_API_KEY } } }, null, 2);
+  return JSON.stringify({
+    "figma-html-bridge": {
+      "command": "npx",
+      "args": ["-y", MCP_GITHUB_REPO],
+      "env": {
+        "FIGMA_SERVER_URL": PROD_SERVER,
+        "FIGMA_SESSION_ID": currentSessionId || "YOUR_SESSION_ID",
+        "API_KEY": PROD_API_KEY
+      }
+    }
+  }, null, 2);
 }
 
+// Update config display when session ID changes
 function updateConfigDisplay() {
   var claudeConfig = document.getElementById('claude-code-cmd');
   var cursorConfig = document.getElementById('cursor-config-code');
-  if (claudeConfig) claudeConfig.textContent = generateClaudeCodeConfig();
-  if (cursorConfig) cursorConfig.textContent = generateCursorConfig();
+  if (claudeConfig) {
+    claudeConfig.textContent = generateClaudeCodeConfig();
+  }
+  if (cursorConfig) {
+    cursorConfig.textContent = generateCursorConfig();
+  }
 }
 
-// ===============================================
-// PARSING ENGINE - PRESERVED FROM ORIGINAL
-// ===============================================
+// Function for conditional debugging logs
+function debugLog(...args) {
+  if (detailedLogsEnabled) {
+    console.log(...args);
+  }
+}
 
+// Essential CSS properties that Figma doesn't support
 var UNSUPPORTED_CSS_PROPERTIES = [
   'animation', 'animation-name', 'animation-duration', 'animation-timing-function',
   'animation-delay', 'animation-iteration-count', 'animation-direction',
   'animation-fill-mode', 'animation-play-state', 'transition', 'transition-property',
   'transition-duration', 'transition-timing-function', 'transition-delay'
+  // Note: 'transform' removed - now supported (rotate, scale, translate)
 ];
 
+// Supported content for pseudo-elements
 var SUPPORTED_CONTENT = {
   '"📚"': '📚', '"💬"': '💬', '"🏛️"': '🏛️', '"⚽"': '⚽', '"🏠"': '🏠', '"👥"': '👥',
   '"📈"': '📈', '"📖"': '📖', '"★"': '★', '"•"': '•', '"→"': '→', '"←"': '←',
@@ -497,13 +551,16 @@ var SUPPORTED_CONTENT = {
   '"🏟️"': '🏟️', '"📍"': '📍', '"🏢"': '🏢', '""': ''
 };
 
+// CSS filtering and parsing functions
 function filterUnsupportedCSS(styles) {
   var filteredStyles = {};
   for (var prop in styles) {
     if (styles.hasOwnProperty(prop)) {
       if (prop === 'content') {
         var contentValue = styles[prop];
-        if (SUPPORTED_CONTENT.hasOwnProperty(contentValue)) filteredStyles[prop] = styles[prop];
+        if (SUPPORTED_CONTENT.hasOwnProperty(contentValue)) {
+          filteredStyles[prop] = styles[prop];
+        }
       } else if (UNSUPPORTED_CSS_PROPERTIES.indexOf(prop) === -1) {
         filteredStyles[prop] = styles[prop];
       }
@@ -514,7 +571,7 @@ function filterUnsupportedCSS(styles) {
 
 function parseInlineStyles(styleStr, trackImportant) {
   var styles = {};
-  var importantStyles = {};
+  var importantStyles = {}; // Track !important properties separately
   if (!styleStr) return trackImportant ? { styles: styles, important: importantStyles } : styles;
   var declarations = styleStr.split(';');
   for (var i = 0; i < declarations.length; i++) {
@@ -522,204 +579,804 @@ function parseInlineStyles(styleStr, trackImportant) {
     if (decl) {
       var colonIdx = decl.indexOf(':');
       if (colonIdx > 0) {
+        // Normalize property names to lowercase for consistency
         var prop = decl.substring(0, colonIdx).trim().toLowerCase();
         var val = decl.substring(colonIdx + 1).trim();
+
+        // Check for and strip !important, tracking it separately
         var isImportant = val.indexOf('!important') !== -1;
-        if (isImportant) val = val.replace(/\s*!important\s*/gi, '').trim();
-        if (isImportant) importantStyles[prop] = val; else styles[prop] = val;
+        if (isImportant) {
+          val = val.replace(/\s*!important\s*/gi, '').trim();
+        }
+
+        if (isImportant) {
+          importantStyles[prop] = val;
+        } else {
+          styles[prop] = val;
+        }
+
+        // Parse 'font' shorthand to extract font-size
+        // font: [style] [variant] [weight] [stretch] size[/line-height] family
         if (prop === 'font' && val) {
           var fontMatch = val.match(/(?:^|\s)(\d+(?:\.\d+)?(?:px|rem|em|pt|vh|vw|%)?)\s*(?:\/\s*[\d.]+(?:px|rem|em|%|[a-z]+)?)?\s+/i);
           if (fontMatch && !styles['font-size'] && !importantStyles['font-size']) {
-            if (isImportant) importantStyles['font-size'] = fontMatch[1]; else styles['font-size'] = fontMatch[1];
+            if (isImportant) {
+              importantStyles['font-size'] = fontMatch[1];
+            } else {
+              styles['font-size'] = fontMatch[1];
+            }
           }
         }
       }
     }
   }
-  if (trackImportant) return { styles: filterUnsupportedCSS(styles), important: filterUnsupportedCSS(importantStyles) };
+
+  if (trackImportant) {
+    return {
+      styles: filterUnsupportedCSS(styles),
+      important: filterUnsupportedCSS(importantStyles)
+    };
+  }
+
+  // For CSS rules storage: preserve !important marker in values
+  // This allows getElementStyles to detect !important later
   var result = filterUnsupportedCSS(styles);
   var importantFiltered = filterUnsupportedCSS(importantStyles);
-  for (var key in importantFiltered) result[key] = importantFiltered[key] + ' !important';
+  for (var key in importantFiltered) {
+    if (importantFiltered.hasOwnProperty(key)) {
+      // Re-add !important marker so it can be detected in getElementStyles
+      result[key] = importantFiltered[key] + ' !important';
+    }
+  }
   return result;
 }
 
+// Función para verificar si un selector CSS es problemático
 function isUnsupportedSelector(selector) {
-  if (selector.charAt(0) === '@') return true;
-  if (selector.includes(':hover') || selector.includes(':active') || selector.includes(':focus') ||
-      selector.includes(':nth-child') || selector.includes(':first-child') || selector.includes(':last-child')) return true;
+  // Omitir @keyframes, @media, etc.
+  if (selector.charAt(0) === '@') {
+    return true;
+  }
+
+  // Omitir pseudo-selectores problemáticos (excepto ::before/::after que ahora soportamos)
+  if (selector.includes(':hover') ||
+      selector.includes(':active') ||
+      selector.includes(':focus') ||
+      selector.includes(':nth-child') ||
+      selector.includes(':first-child') ||
+      selector.includes(':last-child')) {
+    return true;
+  }
+
+  // Permitir ::before y ::after (ahora los soportamos parcialmente)
   return false;
 }
 
+// Función mejorada para manejar selectores CSS complejos
 function parseComplexSelector(selector) {
+  // Limpiar espacios extra (sin regex problemático)
   selector = selector.split(/[ ]+/).join(' ').trim();
-  if (selector.indexOf(',') !== -1) return selector.split(',').map(function(s) { return s.trim(); });
+
+  // Manejar múltiples selectores separados por coma
+  if (selector.indexOf(',') !== -1) {
+    return selector.split(',').map(function(s) { return s.trim(); });
+  }
+
   return [selector];
 }
 
+// Función mejorada para validar selectores CSS
 function isValidCSSSelector(selector) {
+  // Validación simplificada sin regex complejos
   if (!selector || selector.length === 0) return false;
+
+  // Selector de elemento simple (h1, div, span)
   if (/^[a-zA-Z][a-zA-Z0-9-]*$/.test(selector)) return true;
+
+  // Selector de clase simple (.class)
   if (selector.charAt(0) === '.' && selector.indexOf(' ') === -1) return true;
+
+  // Selector de ID (#id)
   if (selector.charAt(0) === '#') return true;
+
+  // Selectores anidados (.parent .child, div .class, etc.)
   if (selector.indexOf(' ') !== -1) return true;
+
+  // Pseudoelementos (::before, ::after)
   if (selector.indexOf('::') !== -1) return true;
+
   return false;
 }
 
 function extractCSS(htmlStr) {
   var cssRules = {};
-  var cssVariables = {};
+  var cssVariables = {}; // FIXED: Store CSS variables
   var allCssText = '';
+
+  // Soportar múltiples style tags
   var searchStr = htmlStr;
+  var startTag = '<style';
+  var endTag = '</style>';
+
   while (true) {
-    var styleStart = searchStr.indexOf('<style');
+    var styleStart = searchStr.indexOf(startTag);
     if (styleStart === -1) break;
-    var contentStart = searchStr.indexOf('>', styleStart) + 1;
-    var styleEnd = searchStr.indexOf('</style>', contentStart);
+
+    var contentStart = searchStr.indexOf('>', styleStart);
+    if (contentStart === -1) break;
+    contentStart += 1;
+
+    var styleEnd = searchStr.indexOf(endTag, contentStart);
     if (styleEnd === -1) break;
+
     allCssText += searchStr.substring(contentStart, styleEnd) + ' ';
-    searchStr = searchStr.substring(styleEnd + 8);
+    searchStr = searchStr.substring(styleEnd + endTag.length);
   }
+
   if (!allCssText) return cssRules;
-  allCssText = allCssText.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // Remove CSS comments (simple approach sin regex problemático)
+  var cleanCss = '';
+  var inComment = false;
+  for (var ci = 0; ci < allCssText.length; ci++) {
+    if (!inComment && allCssText[ci] === '/' && allCssText[ci+1] === '*') {
+      inComment = true;
+      ci++;
+    } else if (inComment && allCssText[ci] === '*' && allCssText[ci+1] === '/') {
+      inComment = false;
+      ci++;
+    } else if (!inComment) {
+      cleanCss += allCssText[ci];
+    }
+  }
+  allCssText = cleanCss;
+
+  // FIXED: Extract CSS variables from :root
   var rootMatch = allCssText.match(/:root\s*\{([^}]+)\}/);
   if (rootMatch) {
-    rootMatch[1].split(';').forEach(function(pair) {
-      var p = pair.trim();
-      if (p.indexOf('--') === 0) {
-        var idx = p.indexOf(':');
-        if (idx > 0) cssVariables[p.substring(0, idx).trim()] = p.substring(idx + 1).trim();
+    var rootDeclarations = rootMatch[1];
+    var varPairs = rootDeclarations.split(';');
+    for (var vi = 0; vi < varPairs.length; vi++) {
+      var pair = varPairs[vi].trim();
+      if (pair.indexOf('--') === 0) {
+        var colonIdx = pair.indexOf(':');
+        if (colonIdx > 0) {
+          var varName = pair.substring(0, colonIdx).trim();
+          var varValue = pair.substring(colonIdx + 1).trim();
+          cssVariables[varName] = varValue;
+        }
       }
-    });
+    }
   }
+
+  // FIXED: Function to resolve var() references
   function resolveVariables(value) {
     if (!value || typeof value !== 'string') return value;
     return value.replace(/var\(([^)]+)\)/g, function(match, varRef) {
       var parts = varRef.split(',');
       var varName = parts[0].trim();
-      return cssVariables[varName] || (parts[1] ? parts[1].trim() : match);
+      var fallback = parts[1] ? parts[1].trim() : null;
+      return cssVariables[varName] || fallback || match;
     });
   }
+
+  // FIXED: Remove @media, @keyframes, @supports blocks to prevent parsing issues
+  // These have nested braces that confuse the simple split by '}'
   function removeAtRuleBlocks(css) {
-    var result = '', i = 0;
+    var result = '';
+    var i = 0;
     while (i < css.length) {
-      if (css[i] === '@' && (css.substring(i, i + 6) === '@media' || css.substring(i, i + 10) === '@keyframes' || css.substring(i, i + 9) === '@supports')) {
-        var b = css.indexOf('{', i); if (b === -1) { i = css.indexOf(';', i) + 1 || css.length; continue; }
-        var c = 1, j = b + 1; while (j < css.length && c > 0) { if (css[j] === '{') c++; else if (css[j] === '}') c--; j++; }
-        i = j;
-      } else { result += css[i]; i++; }
+      // Check for @ rules
+      if (css[i] === '@' && (css.substring(i, i + 6) === '@media' ||
+                             css.substring(i, i + 10) === '@keyframes' ||
+                             css.substring(i, i + 9) === '@supports' ||
+                             css.substring(i, i + 8) === '@charset' ||
+                             css.substring(i, i + 7) === '@import')) {
+        // Find the opening brace
+        var braceStart = css.indexOf('{', i);
+        if (braceStart === -1) {
+          // No brace, skip to end of line
+          var lineEnd = css.indexOf(';', i);
+          i = lineEnd !== -1 ? lineEnd + 1 : css.length;
+          continue;
+        }
+        // Count braces to find matching closing brace
+        var braceCount = 1;
+        var j = braceStart + 1;
+        while (j < css.length && braceCount > 0) {
+          if (css[j] === '{') braceCount++;
+          else if (css[j] === '}') braceCount--;
+          j++;
+        }
+        i = j; // Skip the entire @rule block
+      } else {
+        result += css[i];
+        i++;
+      }
     }
     return result;
   }
+
   allCssText = removeAtRuleBlocks(allCssText);
-  allCssText.split('}').forEach(function(rule) {
-    var r = rule.trim();
-    if (r) {
-      var braceIdx = r.indexOf('{');
+
+  var rules = allCssText.split('}');
+
+  for (var i = 0; i < rules.length; i++) {
+    var rule = rules[i].trim();
+    if (rule) {
+      var braceIdx = rule.indexOf('{');
       if (braceIdx > 0) {
-        var selector = r.substring(0, braceIdx).trim();
-        var declarations = r.substring(braceIdx + 1).trim();
+        var selector = rule.substring(0, braceIdx).trim();
+        var declarations = rule.substring(braceIdx + 1).trim();
+
         if (selector && declarations && !isUnsupportedSelector(selector)) {
-          parseComplexSelector(selector).forEach(function(s) {
-            if (isValidCSSSelector(s)) {
-              var resolved = resolveVariables(declarations);
-              cssRules[s] = Object.assign({}, cssRules[s] || {}, parseInlineStyles(resolved));
+          // Procesar selectores múltiples (separados por coma)
+          var selectors = parseComplexSelector(selector);
+
+          for (var j = 0; j < selectors.length; j++) {
+            var singleSelector = selectors[j];
+
+            if (isValidCSSSelector(singleSelector)) {
+              // FIXED: Resolve CSS variables before parsing
+              var resolvedDeclarations = resolveVariables(declarations);
+              // Almacenar la regla CSS procesada
+              cssRules[singleSelector] = Object.assign({}, cssRules[singleSelector] || {}, parseInlineStyles(resolvedDeclarations));
+
+              // También manejar variaciones del selector
+              if (singleSelector.includes(' ')) {
+                // Para selectores anidados, también guardar versión normalizada
+                var normalizedSelector = singleSelector.replace(/\s+/g, ' ');
+                if (normalizedSelector !== singleSelector) {
+                  cssRules[normalizedSelector] = Object.assign({}, cssRules[normalizedSelector] || {}, parseInlineStyles(resolvedDeclarations));
+                }
+              }
             }
-          });
+          }
         }
       }
     }
-  });
+  }
+
   return cssRules;
 }
 
+// Detect root font-size from CSS (for rem unit conversion)
+// Returns the font-size in pixels, defaults to 16 if not found
 function detectRootFontSize(htmlStr) {
   var cssRules = extractCSS(htmlStr);
-  var val = (cssRules['html'] && cssRules['html']['font-size']) || (cssRules[':root'] && cssRules[':root']['font-size']) || '16px';
-  if (val.indexOf('%') !== -1) return (parseFloat(val) / 100) * 16;
-  return parseFloat(val) || 16;
+  var DEFAULT_REM_BASE = 16;
+
+  // Check html selector first
+  if (cssRules['html'] && cssRules['html']['font-size']) {
+    var fontSize = cssRules['html']['font-size'];
+    // Handle percentage: 62.5% = 10px, 100% = 16px
+    if (fontSize.indexOf('%') !== -1) {
+      var percent = parseFloat(fontSize);
+      if (!isNaN(percent)) {
+        return (percent / 100) * DEFAULT_REM_BASE;
+      }
+    }
+    // Handle px value
+    if (fontSize.indexOf('px') !== -1) {
+      var px = parseFloat(fontSize);
+      if (!isNaN(px)) {
+        return px;
+      }
+    }
+  }
+
+  // Check :root selector
+  if (cssRules[':root'] && cssRules[':root']['font-size']) {
+    var fontSize = cssRules[':root']['font-size'];
+    if (fontSize.indexOf('%') !== -1) {
+      var percent = parseFloat(fontSize);
+      if (!isNaN(percent)) {
+        return (percent / 100) * DEFAULT_REM_BASE;
+      }
+    }
+    if (fontSize.indexOf('px') !== -1) {
+      var px = parseFloat(fontSize);
+      if (!isNaN(px)) {
+        return px;
+      }
+    }
+  }
+
+  return DEFAULT_REM_BASE;
 }
 
+// Viewport presets for design width detection (UI context)
+var VIEWPORT_PRESETS_UI = {
+  'mobile': 375,
+  'tablet': 768,
+  'desktop': 1440,
+  'large': 1600,
+  'wide': 1920
+};
+
+// Detect design width from HTML meta tags ONLY (UI context version)
+// El análisis completo de CSS y estructura se hace en code.ts con calculateContainerWidth()
 function detectDesignWidthFromHTML(htmlStr) {
-  var m = htmlStr.match(/<meta[^>]+name=["']figma-width["'][^>]+content=["'](\d+)["']/i) ||
-          htmlStr.match(/<meta[^>]+content=["'](\d+)["'][^>]+name=["']figma-width["']/i) ||
-          htmlStr.match(/<!--\s*figma-width:\s*(\d+)\s*-->/i);
-  return m ? parseInt(m[1], 10) : null;
+  // 1. Check for meta tag: <meta name="figma-width" content="375"> (flexible order)
+  var widthMatch1 = htmlStr.match(/<meta[^>]+name=["']figma-width["'][^>]+content=["'](\d+)["'][^>]*>/i);
+  var widthMatch2 = htmlStr.match(/<meta[^>]+content=["'](\d+)["'][^>]+name=["']figma-width["'][^>]*>/i);
+  var widthMetaMatch = widthMatch1 || widthMatch2;
+  if (widthMetaMatch) {
+    var width = parseInt(widthMetaMatch[1], 10);
+    if (!isNaN(width) && width > 0) {
+      return width;
+    }
+  }
+
+  // 2. Check for viewport preset: <meta name="figma-viewport" content="mobile"> (flexible order)
+  var vpMatch1 = htmlStr.match(/<meta[^>]+name=["']figma-viewport["'][^>]+content=["'](\w+)["'][^>]*>/i);
+  var vpMatch2 = htmlStr.match(/<meta[^>]+content=["'](\w+)["'][^>]+name=["']figma-viewport["'][^>]*>/i);
+  var viewportMetaMatch = vpMatch1 || vpMatch2;
+  if (viewportMetaMatch) {
+    var preset = viewportMetaMatch[1].toLowerCase();
+    if (VIEWPORT_PRESETS_UI[preset]) {
+      return VIEWPORT_PRESETS_UI[preset];
+    }
+  }
+
+  // 3. Check for HTML comment: <!-- figma-width: 1920 -->
+  var commentMatch = htmlStr.match(/<!--\s*figma-width:\s*(\d+)\s*-->/i);
+  if (commentMatch) {
+    var width = parseInt(commentMatch[1], 10);
+    if (!isNaN(width) && width > 0) {
+      return width;
+    }
+  }
+
+  // 4. UI solo detecta meta tags - el análisis de CSS/estructura se hace en code.ts
+  // Esto evita falsos positivos de elementos como .chapter-image-vertical: 160px
+
+  // Solo retornamos null aquí - code.ts usará calculateContainerWidth()
+  // para el análisis completo de estructura y CSS
+  return null;
 }
 
+// HTML parsing function - COMPLETE VERSION with CSS specificity support
 function simpleParseHTML(htmlStr) {
   var parser = new DOMParser();
   var doc = parser.parseFromString(htmlStr, 'text/html');
   var body = doc.body || doc.documentElement;
+
   var cssRules = extractCSS(htmlStr);
 
+  // Función para extraer content de pseudoelementos
   function extractPseudoContent(element, cssRules) {
-    var className = element.getAttribute('class'), tagName = element.tagName.toLowerCase();
-    var beforeContent = '', afterContent = '';
+    var className = element.getAttribute('class');
+    var tagName = element.tagName.toLowerCase();
+    var beforeContent = '';
+    var afterContent = '';
+
     if (className) {
-      className.split(' ').forEach(function(c) {
-        var b = '.' + c.trim() + '::before', a = '.' + c.trim() + '::after';
-        if (cssRules[b] && cssRules[b].content && SUPPORTED_CONTENT[cssRules[b].content]) beforeContent = SUPPORTED_CONTENT[cssRules[b].content];
-        if (cssRules[a] && cssRules[a].content && SUPPORTED_CONTENT[cssRules[a].content]) afterContent = SUPPORTED_CONTENT[cssRules[a].content];
-      });
-    }
-    return { before: beforeContent, after: afterContent };
-  }
+      var classes = className.split(' ').filter(function(c) { return c.trim(); });
 
-  function calculateSpecificity(selector) {
-    var specificity = 0;
-    for (var i = 0; i < selector.length; i++) {
-      if (selector[i] === '#') specificity += 100; else if (selector[i] === '.') specificity += 10;
-    }
-    return specificity || 1;
-  }
+      // Buscar ::before content
+      for (var i = 0; i < classes.length; i++) {
+        var beforeSelector = '.' + classes[i] + '::before';
+        if (cssRules[beforeSelector] && cssRules[beforeSelector].content) {
+          var contentValue = cssRules[beforeSelector].content;
+          if (SUPPORTED_CONTENT.hasOwnProperty(contentValue)) {
+            beforeContent = SUPPORTED_CONTENT[contentValue];
+            break;
+          }
+        }
+      }
 
-  function getElementStyles(element) {
-    var styles = {}, important = {};
-    var tag = element.tagName.toLowerCase(), cls = element.getAttribute('class'), id = element.getAttribute('id');
-    for (var sel in cssRules) {
-      if (sel.includes('::')) continue;
-      var match = false;
-      if (sel === '*' || sel === tag) match = true;
-      else if (sel.startsWith('.') && cls && cls.includes(sel.substring(1))) match = true;
-      else if (sel.startsWith('#') && id === sel.substring(1)) match = true;
-      else { try { if (element.matches(sel)) match = true; } catch(e) {} }
-      if (match) {
-        for (var p in cssRules[sel]) {
-          var v = cssRules[sel][p];
-          if (typeof v === 'string' && v.includes('!important')) important[p] = v.replace(' !important', '');
-          else styles[p] = v;
+      // Buscar ::after content
+      for (var i = 0; i < classes.length; i++) {
+        var afterSelector = '.' + classes[i] + '::after';
+        if (cssRules[afterSelector] && cssRules[afterSelector].content) {
+          var contentValue = cssRules[afterSelector].content;
+          if (SUPPORTED_CONTENT.hasOwnProperty(contentValue)) {
+            afterContent = SUPPORTED_CONTENT[contentValue];
+            break;
+          }
         }
       }
     }
-    var inline = parseInlineStyles(element.getAttribute('style'), true);
-    return Object.assign(styles, inline.styles, important, inline.important);
+
+    // También buscar por elemento
+    var beforeElementSelector = tagName + '::before';
+    var afterElementSelector = tagName + '::after';
+
+    if (cssRules[beforeElementSelector] && cssRules[beforeElementSelector].content && !beforeContent) {
+      var contentValue = cssRules[beforeElementSelector].content;
+      if (SUPPORTED_CONTENT.hasOwnProperty(contentValue)) {
+        beforeContent = SUPPORTED_CONTENT[contentValue];
+      }
+    }
+
+    if (cssRules[afterElementSelector] && cssRules[afterElementSelector].content && !afterContent) {
+      var contentValue = cssRules[afterElementSelector].content;
+      if (SUPPORTED_CONTENT.hasOwnProperty(contentValue)) {
+        afterContent = SUPPORTED_CONTENT[contentValue];
+      }
+    }
+
+    return { before: beforeContent, after: afterContent };
+  }
+
+  // Función mejorada para obtener todos los selectores que aplican a un elemento
+  function getAllMatchingSelectors(element) {
+    var matchingSelectors = [];
+    var className = element.getAttribute('class');
+    var tagName = element.tagName.toLowerCase();
+    var elementId = element.getAttribute('id');
+
+    // Construir jerarquía de ancestors
+    var ancestors = [];
+    var currentElement = element.parentElement;
+    while (currentElement && currentElement.tagName !== 'BODY' && currentElement.tagName !== 'HTML') {
+      var ancestorClasses = currentElement.getAttribute('class');
+      var ancestorTag = currentElement.tagName.toLowerCase();
+      var ancestorId = currentElement.getAttribute('id');
+
+      ancestors.push({
+        classes: ancestorClasses ? ancestorClasses.split(' ').filter(function(c) { return c.trim(); }) : [],
+        tag: ancestorTag,
+        id: ancestorId
+      });
+      currentElement = currentElement.parentElement;
+    }
+
+    // Verificar todos los selectores CSS disponibles
+    for (var selector in cssRules) {
+      if (cssRules.hasOwnProperty(selector)) {
+        // Skip pseudo-element selectors for main style matching
+        if (selector.includes('::before') || selector.includes('::after')) {
+          continue;
+        }
+        if (selectorMatches(selector, element, className, tagName, elementId, ancestors)) {
+          matchingSelectors.push({
+            selector: selector,
+            specificity: calculateSpecificity(selector),
+            styles: cssRules[selector]
+          });
+        }
+      }
+    }
+
+    // Ordenar por especificidad (menor a mayor)
+    matchingSelectors.sort(function(a, b) {
+      return a.specificity - b.specificity;
+    });
+
+    return matchingSelectors;
+  }
+
+  // Función para verificar si un selector CSS coincide con un elemento
+  function selectorMatches(selector, element, className, tagName, elementId, ancestors) {
+    // FIXED: Universal selector (*) matches all elements
+    if (selector === '*') {
+      return true;
+    }
+
+    // Selector de elemento simple
+    if (selector === tagName) {
+      return true;
+    }
+
+    // Selector de clase simple
+    if (selector.charAt(0) === '.' && !selector.includes(' ') && className) {
+      var selectorClass = selector.substring(1);
+      // Handle combined classes like .class1.class2
+      if (selectorClass.includes('.')) {
+        return matchesCombinedClasses(selector, className);
+      }
+      var classes = className.split(' ').filter(function(c) { return c.trim(); });
+      return classes.indexOf(selectorClass) !== -1;
+    }
+
+    // Selector de ID
+    if (selector.charAt(0) === '#' && elementId) {
+      return selector.substring(1) === elementId;
+    }
+
+    // Selectores anidados (descendant, child >, sibling +, ~)
+    if (selector.includes(' ') || selector.includes('>') || selector.includes('+') || selector.includes('~')) {
+      return matchesNestedSelector(selector, element, className, tagName, elementId, ancestors);
+    }
+
+    // Selectores múltiples con clases combinadas (.class1.class2)
+    if (selector.includes('.') && !selector.includes(' ') && selector.indexOf('.') !== selector.lastIndexOf('.')) {
+      return matchesCombinedClasses(selector, className);
+    }
+
+    return false;
+  }
+
+  // Función para manejar selectores anidados (descendant, child >, sibling +~)
+  function matchesNestedSelector(selector, element, className, tagName, elementId, ancestors) {
+    // Parse selector into tokens with combinators
+    // Combinators: ' ' (descendant), '>' (child), '+' (adjacent sibling), '~' (general sibling)
+    var tokens = parseSelector(selector);
+
+    if (tokens.length === 0) return false;
+
+    // Last token must match current element
+    var lastToken = tokens[tokens.length - 1];
+    if (!selectorMatches(lastToken.selector, element, className, tagName, elementId, [])) {
+      return false;
+    }
+
+    // Process remaining tokens from right to left
+    var ancestorIndex = 0;
+    for (var i = tokens.length - 2; i >= 0; i--) {
+      var token = tokens[i];
+      var combinator = tokens[i + 1].combinator; // Combinator that connects to next token
+      var found = false;
+
+      if (combinator === '>') {
+        // Child combinator: must match immediate parent
+        if (ancestorIndex < ancestors.length) {
+          var parent = ancestors[ancestorIndex];
+          var parentClassNames = parent.classes.join(' ');
+          if (selectorMatches(token.selector, null, parentClassNames, parent.tag, parent.id, [])) {
+            found = true;
+            ancestorIndex++;
+          }
+        }
+      } else if (combinator === '+' || combinator === '~') {
+        // Sibling selectors: not fully supported in this context (need sibling info)
+        // For now, treat as descendant (partial support)
+        while (ancestorIndex < ancestors.length) {
+          var ancestor = ancestors[ancestorIndex];
+          var ancestorClassNames = ancestor.classes.join(' ');
+          if (selectorMatches(token.selector, null, ancestorClassNames, ancestor.tag, ancestor.id, [])) {
+            found = true;
+            ancestorIndex++;
+            break;
+          }
+          ancestorIndex++;
+        }
+      } else {
+        // Descendant combinator (space): can skip ancestors
+        while (ancestorIndex < ancestors.length) {
+          var ancestor = ancestors[ancestorIndex];
+          var ancestorClassNames = ancestor.classes.join(' ');
+          if (selectorMatches(token.selector, null, ancestorClassNames, ancestor.tag, ancestor.id, [])) {
+            found = true;
+            ancestorIndex++;
+            break;
+          }
+          ancestorIndex++;
+        }
+      }
+
+      if (!found) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  // Parse selector into tokens with combinators
+  function parseSelector(selector) {
+    var tokens = [];
+    var current = '';
+    var lastCombinator = ' ';
+
+    for (var i = 0; i < selector.length; i++) {
+      var char = selector[i];
+
+      if (char === '>' || char === '+' || char === '~') {
+        if (current.trim()) {
+          tokens.push({ selector: current.trim(), combinator: lastCombinator });
+        }
+        lastCombinator = char;
+        current = '';
+      } else if (char === ' ') {
+        // Check if this is a space combinator or just whitespace around other combinators
+        if (current.trim() && i + 1 < selector.length) {
+          var nextNonSpace = selector.substring(i + 1).trimStart()[0];
+          if (nextNonSpace !== '>' && nextNonSpace !== '+' && nextNonSpace !== '~') {
+            tokens.push({ selector: current.trim(), combinator: lastCombinator });
+            lastCombinator = ' ';
+            current = '';
+          }
+        }
+      } else {
+        current += char;
+      }
+    }
+
+    if (current.trim()) {
+      tokens.push({ selector: current.trim(), combinator: lastCombinator });
+    }
+
+    return tokens;
+  }
+
+  // Función para manejar clases combinadas (.class1.class2)
+  function matchesCombinedClasses(selector, className) {
+    if (!className) return false;
+
+    var requiredClasses = selector.split('.').filter(function(c) { return c.trim(); });
+    var elementClasses = className.split(' ').filter(function(c) { return c.trim(); });
+
+    return requiredClasses.every(function(reqClass) {
+      return elementClasses.indexOf(reqClass) !== -1;
+    });
+  }
+
+  // Calcular especificidad CSS básica
+  function calculateSpecificity(selector) {
+    var specificity = 0;
+
+    // IDs = 100 (contar #)
+    for (var si = 0; si < selector.length; si++) {
+      if (selector[si] === '#') specificity += 100;
+    }
+
+    // Classes = 10 (contar .)
+    for (var si = 0; si < selector.length; si++) {
+      if (selector[si] === '.') specificity += 10;
+    }
+
+    // Elements = 1 (buscar palabras alfabéticas que no sigan a . o #)
+    var inWord = false;
+    var wordStart = 0;
+    for (var si = 0; si <= selector.length; si++) {
+      var ch = selector[si];
+      var isAlpha = ch && ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch === '-');
+      if (isAlpha && !inWord) {
+        inWord = true;
+        wordStart = si;
+      } else if (!isAlpha && inWord) {
+        inWord = false;
+        // Verificar si la palabra anterior no empieza con . o #
+        var prevChar = wordStart > 0 ? selector[wordStart - 1] : '';
+        if (prevChar !== '.' && prevChar !== '#') {
+          specificity += 1;
+        }
+      }
+    }
+
+    return specificity;
+  }
+
+  function getElementStyles(element) {
+    var styles = {};
+    var cssImportantStyles = {}; // CSS rules with !important
+
+    // Obtener todos los selectores que coinciden y aplicar en orden de especificidad
+    var matchingSelectors = getAllMatchingSelectors(element);
+
+    for (var i = 0; i < matchingSelectors.length; i++) {
+      var selectorStyles = matchingSelectors[i].styles;
+      // Separate !important CSS properties
+      for (var prop in selectorStyles) {
+        if (selectorStyles.hasOwnProperty(prop)) {
+          var val = selectorStyles[prop];
+          if (typeof val === 'string' && val.indexOf('!important') !== -1) {
+            cssImportantStyles[prop] = val.replace(/\s*!important\s*/gi, '').trim();
+          } else {
+            styles[prop] = val;
+          }
+        }
+      }
+    }
+
+    // Apply inline styles (with !important tracking)
+    var inlineStyle = element.getAttribute('style');
+    var inlineNormal = {};
+    var inlineImportant = {};
+
+    if (inlineStyle) {
+      var parsed = parseInlineStyles(inlineStyle, true);
+      inlineNormal = parsed.styles;
+      inlineImportant = parsed.important;
+    }
+
+    // CSS cascade order:
+    // 1. Normal CSS (already in styles)
+    // 2. Normal inline styles (override CSS)
+    styles = Object.assign(styles, inlineNormal);
+    // 3. CSS !important (override inline normal)
+    styles = Object.assign(styles, cssImportantStyles);
+    // 4. Inline !important (override everything)
+    styles = Object.assign(styles, inlineImportant);
+
+    return styles;
   }
 
   function nodeToStruct(node) {
     if (node.nodeType === 1) {
       var tag = node.tagName.toLowerCase();
-      if (['script', 'style', 'link', 'meta'].includes(tag)) return null;
-      var styles = getElementStyles(node), children = [], mixed = [], pseudo = extractPseudoContent(node, cssRules);
-      if (pseudo.before) mixed.push({ type: 'text', text: pseudo.before });
+      var styles = getElementStyles(node);
+      var text = '';
+      var children = [];
+      var mixedContent = []; // NEW: Track order of text and elements
+
+      // Extraer contenido de pseudoelementos
+      var pseudoContent = extractPseudoContent(node, cssRules);
+
+      // Add ::before content as first mixed content item
+      if (pseudoContent.before) {
+        mixedContent.push({ type: 'text', text: pseudoContent.before });
+      }
+
       for (var i = 0; i < node.childNodes.length; i++) {
-        var c = node.childNodes[i];
-        if (c.nodeType === 3) {
-          var t = c.textContent.trim(); if (t) mixed.push({ type: 'text', text: t });
-        } else if (c.nodeType === 1) {
-          var s = nodeToStruct(c); if (s) { children.push(s); mixed.push({ type: 'element', node: s }); }
+        var child = node.childNodes[i];
+        if (child.nodeType === 3) {
+          var textContent = child.textContent.trim();
+          if (textContent) {
+            text += textContent;
+            // NEW: Add text to mixedContent array in order
+            mixedContent.push({ type: 'text', text: textContent });
+          }
+        } else if (child.nodeType === 1) {
+          var childStruct = nodeToStruct(child);
+          if (childStruct) {
+            children.push(childStruct);
+            // NEW: Add element to mixedContent array in order
+            mixedContent.push({ type: 'element', node: childStruct });
+          }
         }
       }
-      if (pseudo.after) mixed.push({ type: 'text', text: pseudo.after });
+
+      // Add ::after content as last mixed content item
+      if (pseudoContent.after) {
+        mixedContent.push({ type: 'text', text: pseudoContent.after });
+      }
+
+      // Legacy text property (for backward compatibility)
+      if (pseudoContent.before) {
+        text = pseudoContent.before + (text ? ' ' + text : '');
+      }
+      if (pseudoContent.after) {
+        text = (text || '') + (text ? ' ' : '') + pseudoContent.after;
+      }
+
+      // Determine if this element has mixed content (text interleaved with elements)
+      var hasMixedContent = false;
+      var hasText = false;
+      var hasElements = false;
+      for (var j = 0; j < mixedContent.length; j++) {
+        if (mixedContent[j].type === 'text') hasText = true;
+        if (mixedContent[j].type === 'element') hasElements = true;
+      }
+      hasMixedContent = hasText && hasElements;
+
       return {
-        type: 'element', tagName: tag, text: node.innerText || '', styles: styles,
-        attributes: { src: node.getAttribute('src'), value: node.getAttribute('value'), placeholder: node.getAttribute('placeholder'), alt: node.getAttribute('alt'), rows: node.getAttribute('rows') },
-        children: children, mixedContent: mixed.length > 1 ? mixed : null
+        type: 'element',
+        tagName: tag,
+        text: text.trim(),
+        styles: styles,
+        attributes: {
+          value: node.getAttribute('value'),
+          placeholder: node.getAttribute('placeholder'),
+          alt: node.getAttribute('alt'),
+          rows: node.getAttribute('rows'),
+          src: node.getAttribute('src')
+        },
+        children: children,
+        mixedContent: hasMixedContent ? mixedContent : null, // Only include if truly mixed
+        pseudoContent: pseudoContent // Guardar para referencia
       };
     }
     return null;
   }
-  return [nodeToStruct(body)];
+
+  // Include body element with its styles (background, font-family, etc.)
+  var bodyStruct = nodeToStruct(body);
+  if (bodyStruct) {
+    return [bodyStruct];
+  }
+
+  // Fallback: if body parsing fails, return children directly
+  var result = [];
+  for (var i = 0; i < body.childNodes.length; i++) {
+    var child = nodeToStruct(body.childNodes[i]);
+    if (child) result.push(child);
+  }
+
+  return result;
 }
 
 // ===============================================
@@ -774,16 +1431,34 @@ document.addEventListener('DOMContentLoaded', function() {
   };
 
   // Convert Paste button
-  document.getElementById('send-btn').onclick = function() {
+  document.getElementById('send-btn').onclick = async function() {
     var val = document.getElementById('html-input').value;
     if (!val.trim()) { alert('Please paste HTML.'); return; }
-    var structure = simpleParseHTML(val);
-    parent.postMessage({ pluginMessage: {
-      type: 'html-structure', structure: structure,
-      detectedWidth: detectDesignWidthFromHTML(val),
-      detectedRemBase: detectRootFontSize(val),
-      sourceType: 'paste', name: 'Pasted HTML'
-    } }, '*');
+
+    var btn = document.getElementById('send-btn');
+    var oldHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.textContent = 'Converting...';
+
+    try {
+      var structure = simpleParseHTML(val);
+      await collectAndFetchImages(structure);
+      var detectedWidth = detectDesignWidthFromHTML(val);
+      var detectedRemBase = detectRootFontSize(val);
+
+      parent.postMessage({ pluginMessage: {
+        type: 'html-structure', structure: structure,
+        detectedWidth: detectedWidth,
+        detectedRemBase: detectedRemBase,
+        sourceType: 'paste', name: 'Pasted HTML'
+      } }, '*');
+    } catch(e) {
+      console.error(e);
+      alert('Error: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = oldHtml;
+    }
   };
 
   // URL Import button
@@ -817,13 +1492,27 @@ document.addEventListener('DOMContentLoaded', function() {
   };
 
   // Convert Upload/URL button
-  document.getElementById('upload-convert-btn').onclick = function() {
+  document.getElementById('upload-convert-btn').onclick = async function() {
     if (!uploadedContent) return;
-    var structure = simpleParseHTML(uploadedContent);
-    parent.postMessage({ pluginMessage: {
-      type: 'html-structure', structure: structure,
-      name: 'Imported Page', sourceType: 'url'
-    } }, '*');
+
+    var btn = document.getElementById('upload-convert-btn');
+    btn.disabled = true;
+    btn.textContent = 'Converting...';
+
+    try {
+      var structure = simpleParseHTML(uploadedContent);
+      await collectAndFetchImages(structure);
+      parent.postMessage({ pluginMessage: {
+        type: 'html-structure', structure: structure,
+        name: 'Imported Page', sourceType: 'url'
+      } }, '*');
+    } catch(e) {
+      console.error(e);
+      alert('Error: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Convert Import';
+    }
   };
 
   // Clear history
@@ -859,6 +1548,27 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('minimized-expand-btn').onclick = toggleMinimize;
 });
 
+// Image fetching logic
+async function collectAndFetchImages(struct) {
+  async function traverse(nodes) {
+    if (!nodes) return;
+    for (let n of nodes) {
+      if (n.tagName === 'img' && n.attributes && n.attributes.src) {
+        try {
+          let r = await fetch(n.attributes.src);
+          if (r.ok) {
+            n.imageData = Array.from(new Uint8Array(await r.arrayBuffer()));
+          }
+        } catch(e) {
+          console.warn('Failed to fetch image:', n.attributes.src);
+        }
+      }
+      if (n.children) await traverse(n.children);
+    }
+  }
+  await traverse(struct);
+}
+
 // SSE Status Updates
 function updateSSEStatus(t, s) {
   var ind = document.getElementById('sse-indicator'), txt = document.getElementById('sse-status-text');
@@ -883,19 +1593,27 @@ function updateHistory(history) {
   });
 }
 
-window.onmessage = function(event) {
+window.onmessage = async function(event) {
   var msg = event.data.pluginMessage;
+  if (!msg) return;
+
   if (msg.type === 'session-id') {
     currentSessionId = msg.sessionId; updateConfigDisplay();
     parent.postMessage({ pluginMessage: { type: 'load-history' } }, '*');
   }
   if (msg.type === 'history-updated') updateHistory(msg.history);
   if (msg.type === 'parse-mcp-html') {
-    var struct = simpleParseHTML(msg.html);
-    parent.postMessage({ pluginMessage: { type: 'html-structure', structure: struct, name: msg.name, fromMCP: true } }, '*');
+    try {
+      var struct = simpleParseHTML(msg.html);
+      await collectAndFetchImages(struct);
+      parent.postMessage({ pluginMessage: { type: 'html-structure', structure: struct, name: msg.name, fromMCP: true } }, '*');
+    } catch (e) {
+      console.error('Error parsing MCP HTML:', e);
+    }
   }
   if (msg.type === 'sse-connected') updateSSEStatus('SSE Connected', 'connected');
   if (msg.type === 'sse-disconnected') updateSSEStatus('SSE Disconnected', 'disconnected');
+  if (msg.type === 'mcp-status-update') updateMCPStatus(msg.message, msg.status || 'info');
 };
 
 </script>
