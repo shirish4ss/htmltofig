@@ -2927,31 +2927,9 @@
     if (msg.type === "sse-connected") {
       sseConnected = true;
       sseLastSuccessTimestamp = Date.now();
-      console.log("[SSE] \u{1F7E2} Connected");
     }
     if (msg.type === "sse-disconnected") {
       sseConnected = false;
-      console.log("[SSE] \u{1F534} Disconnected");
-    }
-    if (msg.type === "sse-message-processed") {
-      sseLastSuccessTimestamp = msg.timestamp || Date.now();
-      debugLog("[MCP] \u{1F4E1} SSE message processed, timestamp updated");
-    }
-    if (msg.type === "sse-processing-timestamp") {
-      sseLastSuccessTimestamp = msg.timestamp;
-      debugLog("[MCP] \u{1F3AF} SSE processing timestamp - fallback blocked");
-    }
-    if (msg.type === "start-sse") {
-      debugLog("[SSE] Starting SSE connection from UI...");
-      figma.ui.postMessage({
-        type: "start-sse-connection"
-      });
-    }
-    if (msg.type === "stop-sse") {
-      debugLog("[SSE] Stopping SSE connection from UI...");
-      figma.ui.postMessage({
-        type: "stop-sse-connection"
-      });
     }
     if (msg.type === "test-broadcast") {
       debugLog("[SSE] Connection test requested from UI...");

@@ -3304,45 +3304,14 @@ figma.ui.onmessage = async (msg) => {
     figma.notify('⏹️ MCP Monitoring detenido');
   }
 
-  // NEW: SSE Status Updates from UI
+  // SSE Status Updates from UI
   if (msg.type === 'sse-connected') {
     sseConnected = true;
     sseLastSuccessTimestamp = Date.now();
-    console.log('[SSE] 🟢 Connected');
   }
 
   if (msg.type === 'sse-disconnected') {
     sseConnected = false;
-    console.log('[SSE] 🔴 Disconnected');
-  }
-
-  if (msg.type === 'sse-message-processed') {
-    sseLastSuccessTimestamp = msg.timestamp || Date.now();
-    debugLog('[MCP] 📡 SSE message processed, timestamp updated');
-  }
-
-  if (msg.type === 'sse-processing-timestamp') {
-    // SSE is actively processing this timestamp - mark it to prevent fallback
-    sseLastSuccessTimestamp = msg.timestamp;
-    debugLog('[MCP] 🎯 SSE processing timestamp - fallback blocked');
-  }
-
-  // NEW UI ELEMENT HANDLERS
-  // SSE HANDLERS - Properly integrated
-  if (msg.type === 'start-sse') {
-    debugLog('[SSE] Starting SSE connection from UI...');
-    // Start actual SSE connection
-    figma.ui.postMessage({
-      type: 'start-sse-connection'
-    });
-  }
-
-  if (msg.type === 'stop-sse') {
-    debugLog('[SSE] Stopping SSE connection from UI...');
-    // Stop actual SSE connection
-    figma.ui.postMessage({
-      type: 'stop-sse-connection'
-    });
   }
 
   if (msg.type === 'test-broadcast') {

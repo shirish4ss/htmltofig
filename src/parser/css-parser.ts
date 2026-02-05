@@ -36,10 +36,6 @@ export function filterUnsupportedCSS(styles: CSSProperties): CSSProperties {
  * Parse inline style string to object
  * Example: "color: red; font-size: 16px;" → { color: 'red', 'font-size': '16px' }
  */
-/**
- * Parse inline style string to object
- * Example: "color: red; font-size: 16px;" → { color: 'red', 'font-size': '16px' }
- */
 export function parseInlineStyles(styleStr: string | undefined): CSSProperties {
   const styles: CSSProperties = {};
   const importantStyles: CSSProperties = {};
