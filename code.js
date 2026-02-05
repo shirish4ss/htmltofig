@@ -2504,16 +2504,29 @@
           const height = parseSize((_Bc = node.styles) == null ? void 0 : _Bc.height) || 150;
           const frame = figma.createFrame();
           frame.resize(width, height);
-          frame.fills = [{ type: "SOLID", color: { r: 0.9, g: 0.9, b: 0.9 } }];
           frame.name = "Image: " + (((_Cc = node.attributes) == null ? void 0 : _Cc.alt) || "Unnamed");
-          frame.layoutMode = "HORIZONTAL";
-          frame.primaryAxisAlignItems = "CENTER";
-          frame.counterAxisAlignItems = "CENTER";
-          await figma.loadFontAsync({ family: "Inter", style: "Regular" });
-          const placeholderText = figma.createText();
-          placeholderText.characters = ((_Dc = node.attributes) == null ? void 0 : _Dc.alt) || "Image";
-          placeholderText.fills = [{ type: "SOLID", color: { r: 0.5, g: 0.5, b: 0.5 } }];
-          frame.appendChild(placeholderText);
+          if (node.imageData) {
+            try {
+              const image = figma.createImage(new Uint8Array(node.imageData));
+              frame.fills = [{
+                type: "IMAGE",
+                imageHash: image.hash,
+                scaleMode: "FILL"
+              }];
+            } catch (e) {
+              frame.fills = [{ type: "SOLID", color: { r: 0.9, g: 0.9, b: 0.9 } }];
+            }
+          } else {
+            frame.fills = [{ type: "SOLID", color: { r: 0.9, g: 0.9, b: 0.9 } }];
+            frame.layoutMode = "HORIZONTAL";
+            frame.primaryAxisAlignItems = "CENTER";
+            frame.counterAxisAlignItems = "CENTER";
+            await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+            const placeholderText = figma.createText();
+            placeholderText.characters = ((_Dc = node.attributes) == null ? void 0 : _Dc.alt) || "Image";
+            placeholderText.fills = [{ type: "SOLID", color: { r: 0.5, g: 0.5, b: 0.5 } }];
+            frame.appendChild(placeholderText);
+          }
           if (!parentFrame) {
             frame.x = startX;
             frame.y = startY;

@@ -2688,20 +2688,34 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
 
         const frame = figma.createFrame();
         frame.resize(width, height);
-        frame.fills = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }];
         frame.name = 'Image: ' + (node.attributes?.alt || 'Unnamed');
 
-        // Center the placeholder text
-        frame.layoutMode = 'HORIZONTAL';
-        frame.primaryAxisAlignItems = 'CENTER';
-        frame.counterAxisAlignItems = 'CENTER';
+        if (node.imageData) {
+          try {
+            const image = figma.createImage(new Uint8Array(node.imageData));
+            frame.fills = [{
+              type: 'IMAGE',
+              imageHash: image.hash,
+              scaleMode: 'FILL'
+            }];
+          } catch (e) {
+            frame.fills = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }];
+          }
+        } else {
+          frame.fills = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }];
 
-        // Add placeholder text
-        await figma.loadFontAsync({ family: "Inter", style: "Regular" });
-        const placeholderText = figma.createText();
-        placeholderText.characters = node.attributes?.alt || 'Image';
-        placeholderText.fills = [{ type: 'SOLID', color: { r: 0.5, g: 0.5, b: 0.5 } }];
-        frame.appendChild(placeholderText);
+          // Center the placeholder text
+          frame.layoutMode = 'HORIZONTAL';
+          frame.primaryAxisAlignItems = 'CENTER';
+          frame.counterAxisAlignItems = 'CENTER';
+
+          // Add placeholder text
+          await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+          const placeholderText = figma.createText();
+          placeholderText.characters = node.attributes?.alt || 'Image';
+          placeholderText.fills = [{ type: 'SOLID', color: { r: 0.5, g: 0.5, b: 0.5 } }];
+          frame.appendChild(placeholderText);
+        }
 
         if (!parentFrame) {
           frame.x = startX;

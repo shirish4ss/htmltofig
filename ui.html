@@ -48,7 +48,7 @@
     }
 
     header {
-      padding: 12px 16px;
+      padding: 12px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -59,8 +59,9 @@
       flex-shrink: 0;
     }
 
-    .logo-area { display: flex; align-items: center; gap: 10px; }
+    .logo-area { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
     .logo-icon {
+      flex-shrink: 0;
       width: 28px; height: 28px;
       background: var(--primary-gradient);
       border-radius: 6px;
@@ -69,9 +70,9 @@
       box-shadow: 0 4px 10px rgba(147, 51, 234, 0.3);
     }
     .logo-text { font-size: 13px; font-weight: 800; letter-spacing: -0.01em; line-height: 1.2; }
-    .header-tagline { font-size: 9px; color: var(--text-secondary); white-space: nowrap; line-height: 1.2; }
+    .header-tagline { font-size: 9px; color: var(--text-secondary); line-height: 1.2; }
 
-    .header-actions { display: flex; gap: 10px; align-items: center; }
+    .header-actions { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
     .icon-btn { background: transparent; border: none; color: var(--text-secondary); cursor: pointer; padding: 4px; transition: all 0.2s; display: flex; align-items: center; }
     .icon-btn:hover { color: var(--text); transform: scale(1.1); }
 
@@ -159,7 +160,6 @@
     .social-links { display: flex; gap: 16px; align-items: center; }
     .social-link { color: var(--text-secondary); text-decoration: none; transition: color 0.2s; font-size: 12px; display: flex; align-items: center; gap: 6px; }
     .social-link:hover { color: var(--primary); }
-    .social-link svg { width: 16px; height: 16px; }
 
     .minimized-bar {
       display: none; padding: 0 16px; background: var(--bg); align-items: center; justify-content: space-between; height: 40px;
@@ -204,16 +204,16 @@
     <header>
       <div class="logo-area">
         <div class="logo-icon">W</div>
-        <div style="display: flex; flex-direction: column;">
+        <div style="display: flex; flex-direction: column; min-width: 0;">
           <div class="logo-text">HTML, Web & URL to Figma AI</div>
           <div class="header-tagline">Convert Code, URLs & Webpages instantly. Developed by Shirish Salve.</div>
         </div>
       </div>
       <div class="header-actions">
-        <a href="https://www.buymeacoffee.com/shirish" target="_blank" style="text-decoration: none;">
-          <img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=☕&slug=shirish&button_colour=BD5FFF&font_colour=ffffff&font_family=Cookie&outline_colour=000000&coffee_colour=FFDD00" height="30" />
+        <a href="https://www.buymeacoffee.com/shirish" target="_blank" style="text-decoration: none; display: flex; align-items: center;">
+          <img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=☕&slug=shirish&button_colour=BD5FFF&font_colour=ffffff&font_family=Cookie&outline_colour=000000&coffee_colour=FFDD00" height="24" />
         </a>
-        <button class="icon-btn" id="minimize-btn" title="Minimize">
+        <button class="icon-btn" id="minimize-btn" title="Minimize" style="margin-left: 4px;">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 9l-7 7-7-7"></path></svg>
         </button>
       </div>
@@ -359,17 +359,11 @@
         Fuel my creativity and get exclusive updates by supporting me on <a href="https://www.patreon.com/cw/shirishsalve" target="_blank" style="color: var(--primary); text-decoration: none; font-weight: 600;">Patreon</a>
       </div>
       <div class="social-links">
-        <a href="https://www.behance.net/myselfshirish" target="_blank" class="social-link">
-          <svg viewBox="0 0 26 26" fill="currentColor"><path d="M22.228 14.22c-1.35 0-2.316.666-2.795 1.583h5.706c-.114-1.077-.925-1.583-2.911-1.583zm-.065-1.51c1.47 0 2.723.473 3.514 1.258.745.74 1.144 1.776 1.144 3.036v.44h-8.618c.038 1.84 1.173 2.87 3.09 2.87 1.218 0 2.115-.357 2.768-.902l.965.986c-.958.95-2.28 1.486-3.86 1.486-3.328 0-5.323-2.022-5.323-5.074 0-3.13 2.062-5.086 5.32-5.086zm-14.735 6.435h-1.28v-3.23h1.28c.954 0 1.52.41 1.52 1.625s-.566 1.605-1.52 1.605zm1.536-4.945c0 1.054-.504 1.536-1.424 1.536H6.148V9.32h1.46c.866 0 1.264.445 1.264 1.34v.546zm3.322 3.16c.852-.61 1.393-1.6 1.393-2.85 0-2.31-1.448-3.716-4.04-3.716H3.454v11.706h4.51c3.15 0 4.67-1.54 4.67-3.92 0-1.476-.73-2.73-1.92-3.33zm1.182-7.143h6.91v1.178h-6.91V10.21z"/></svg>
-          Behance
-        </a>
+        <a href="https://www.behance.net/myselfshirish" target="_blank" class="social-link">Behance</a>
         <a href="https://www.buymeacoffee.com/shirish" target="_blank" style="text-decoration: none;">
           <img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=☕&slug=shirish&button_colour=BD5FFF&font_colour=ffffff&font_family=Cookie&outline_colour=000000&coffee_colour=FFDD00" height="32" />
         </a>
-        <a href="https://www.patreon.com/cw/shirishsalve" target="_blank" class="social-link">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.386 0.501c-5.239 0-9.507 4.264-9.507 9.507 0 5.238 4.268 9.506 9.507 9.506 5.239 0 9.507-4.268 9.507-9.506 0-5.243-4.268-9.507-9.507-9.507zM0.438 23.232h4.516v-22.731h-4.516v22.731z"/></svg>
-          Patreon
-        </a>
+        <a href="https://www.patreon.com/cw/shirishsalve" target="_blank" class="social-link">Patreon</a>
       </div>
     </footer>
   </div>
@@ -465,14 +459,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const oldTxt = btn.innerHTML;
     btn.disabled = true; btn.textContent = 'Processing...';
     try {
-      const struct = simpleParseHTML(html);
-      await collectAndFetchImages(struct);
-      parent.postMessage({ pluginMessage: {
-        type: 'html-structure', structure: struct,
-        detectedWidth: detectDesignWidthFromHTML(html),
-        detectedRemBase: detectRootFontSize(html),
-        sourceType: 'paste', name: 'Pasted HTML'
-      } }, '*');
+      var structure = simpleParseHTML(html);
+      await collectAndFetchImages(structure);
+      var detectedWidth = detectDesignWidthFromHTML(html);
+      var detectedRemBase = detectRootFontSize(html);
+
+      parent.postMessage({
+        pluginMessage: {
+          type: 'html-structure',
+          structure: structure,
+          detectedWidth: detectedWidth,
+          detectedRemBase: detectedRemBase,
+          sourceType: 'paste',
+          name: 'Pasted HTML'
+        }
+      }, '*');
     } catch(e) { console.error(e); alert('Error parsing HTML');
     } finally { btn.disabled = false; btn.innerHTML = oldTxt; }
   };
@@ -508,10 +509,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const btn = document.getElementById('upload-convert-btn');
     btn.disabled = true; btn.textContent = 'Processing...';
     try {
-      const struct = simpleParseHTML(uploadedContent);
-      await collectAndFetchImages(struct);
+      var structure = simpleParseHTML(uploadedContent);
+      await collectAndFetchImages(structure);
       parent.postMessage({ pluginMessage: {
-        type: 'html-structure', structure: struct,
+        type: 'html-structure', structure: structure,
         name: 'Imported Webpage', sourceType: 'url'
       } }, '*');
     } finally { btn.disabled = false; btn.textContent = 'Convert Import'; }
@@ -522,7 +523,7 @@ document.addEventListener('DOMContentLoaded', function() {
     parent.postMessage({ pluginMessage: { type: 'clear-history' } }, '*');
   };
 
-  // MCP Control - FIXED: Direct SSE start/stop
+  // MCP Control
   document.getElementById('mcp-switch').onchange = function() {
     if (this.checked) {
       updateSSEStatus('Connecting...', 'connecting');
@@ -550,18 +551,33 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ===============================================
-// ROBUST PARSING ENGINE
+// HIGH-FIDELITY PARSING ENGINE (from .orig)
 // ===============================================
 
-var UNSUPPORTED_CSS_PROPERTIES = ['content', 'cursor', 'pointer-events', 'user-select'];
-var SUPPORTED_CONTENT = { '""': '', '" "': ' ' };
+var UNSUPPORTED_CSS_PROPERTIES = [
+  'animation', 'animation-name', 'animation-duration', 'animation-timing-function',
+  'animation-delay', 'animation-iteration-count', 'animation-direction',
+  'animation-fill-mode', 'animation-play-state', 'transition', 'transition-property',
+  'transition-duration', 'transition-timing-function', 'transition-delay'
+];
+
+var SUPPORTED_CONTENT = {
+  '"📚"': '📚', '"💬"': '💬', '"🏛️"': '🏛️', '"⚽"': '⚽', '"🏠"': '🏠', '"👥"': '👥',
+  '"📈"': '📈', '"📖"': '📖', '"★"': '★', '"•"': '•', '"→"': '→', '"←"': '←',
+  '"▼"': '▼', '"▲"': '▲', '"✓"': '✓', '"✗"': '✗', '"💡"': '💡', '"🎯"': '🎯',
+  '"📅"': '📅', '"🕐"': '🕐', '"⏱️"': '⏱️', '"📊"': '📊', '"📝"': '📝',
+  '"🏟️"': '🏟️', '"📍"': '📍', '"🏢"': '🏢', '""': '', '" "': ' '
+};
 
 function filterUnsupportedCSS(styles) {
   var filteredStyles = {};
   for (var prop in styles) {
     if (styles.hasOwnProperty(prop)) {
       if (prop === 'content') {
-        if (SUPPORTED_CONTENT.hasOwnProperty(styles[prop])) filteredStyles[prop] = styles[prop];
+        var contentValue = styles[prop];
+        if (SUPPORTED_CONTENT.hasOwnProperty(contentValue)) {
+          filteredStyles[prop] = styles[prop];
+        }
       } else if (UNSUPPORTED_CSS_PROPERTIES.indexOf(prop) === -1) {
         filteredStyles[prop] = styles[prop];
       }
@@ -589,7 +605,8 @@ function parseInlineStyles(styleStr, trackImportant) {
         if (prop === 'font' && val) {
           var fontMatch = val.match(/(?:^|\s)(\d+(?:\.\d+)?(?:px|rem|em|pt|vh|vw|%)?)\s*(?:\/\s*[\d.]+(?:px|rem|em|%|[a-z]+)?)?\s+/i);
           if (fontMatch && !styles['font-size'] && !importantStyles['font-size']) {
-             if (isImportant) importantStyles['font-size'] = fontMatch[1]; else styles['font-size'] = fontMatch[1];
+            if (isImportant) importantStyles['font-size'] = fontMatch[1];
+            else styles['font-size'] = fontMatch[1];
           }
         }
       }
@@ -600,6 +617,31 @@ function parseInlineStyles(styleStr, trackImportant) {
   var importantFiltered = filterUnsupportedCSS(importantStyles);
   for (var key in importantFiltered) result[key] = importantFiltered[key] + ' !important';
   return result;
+}
+
+function isUnsupportedSelector(selector) {
+  if (selector.charAt(0) === '@') return true;
+  if (selector.includes(':hover') || selector.includes(':active') || selector.includes(':focus') ||
+      selector.includes(':nth-child') || selector.includes(':first-child') || selector.includes(':last-child')) {
+    return true;
+  }
+  return false;
+}
+
+function parseComplexSelector(selector) {
+  selector = selector.split(/[ ]+/).join(' ').trim();
+  if (selector.indexOf(',') !== -1) return selector.split(',').map(function(s) { return s.trim(); });
+  return [selector];
+}
+
+function isValidCSSSelector(selector) {
+  if (!selector || selector.length === 0) return false;
+  if (/^[a-zA-Z][a-zA-Z0-9-]*$/.test(selector)) return true;
+  if (selector.charAt(0) === '.' && selector.indexOf(' ') === -1) return true;
+  if (selector.charAt(0) === '#') return true;
+  if (selector.indexOf(' ') !== -1 || selector.indexOf('>') !== -1) return true;
+  if (selector.indexOf('::') !== -1) return true;
+  return false;
 }
 
 function extractCSS(htmlStr) {
@@ -617,7 +659,7 @@ function extractCSS(htmlStr) {
     searchStr = searchStr.substring(styleEnd + 8);
   }
   if (!allCssText) return cssRules;
-  allCssText = allCssText.replace(/\/\*[\s\S]*?\*\//g, ''); // Simple comment removal
+  allCssText = allCssText.replace(/\/\*[\s\S]*?\*\//g, ''); // Remove comments
 
   var rootMatch = allCssText.match(/:root\s*\{([^}]+)\}/);
   if (rootMatch) {
@@ -630,26 +672,47 @@ function extractCSS(htmlStr) {
     });
   }
 
-  function resolveVar(value) {
+  function resolveVariables(value) {
     if (!value || typeof value !== 'string') return value;
-    return value.replace(/var\(([^)]+)\)/g, (match, v) => {
-      var parts = v.split(',');
-      return cssVariables[parts[0].trim()] || (parts[1] ? parts[1].trim() : match);
+    return value.replace(/var\(([^)]+)\)/g, function(match, varRef) {
+      var parts = varRef.split(',');
+      var varName = parts[0].trim();
+      var fallback = parts[1] ? parts[1].trim() : null;
+      return cssVariables[varName] || fallback || match;
     });
   }
 
-  var cleanCss = allCssText.replace(/@(?:media|keyframes|supports)[^{]*\{([^{}]*\{[^{}]*\})*[^{}]*\}/g, '');
-  cleanCss.split('}').forEach(rule => {
+  function removeAtRuleBlocks(css) {
+    var result = '';
+    var i = 0;
+    while (i < css.length) {
+      if (css[i] === '@' && (css.substring(i, i + 6) === '@media' || css.substring(i, i + 10) === '@keyframes' || css.substring(i, i + 9) === '@supports')) {
+        var braceStart = css.indexOf('{', i);
+        if (braceStart === -1) { i = css.indexOf(';', i) + 1 || css.length; continue; }
+        var braceCount = 1, j = braceStart + 1;
+        while (j < css.length && braceCount > 0) {
+          if (css[j] === '{') braceCount++; else if (css[j] === '}') braceCount--;
+          j++;
+        }
+        i = j;
+      } else { result += css[i]; i++; }
+    }
+    return result;
+  }
+
+  allCssText = removeAtRuleBlocks(allCssText);
+  allCssText.split('}').forEach(rule => {
     var r = rule.trim();
     if (r) {
-      var idx = r.indexOf('{');
-      if (idx > 0) {
-        var selector = r.substring(0, idx).trim();
-        var decls = resolveVar(r.substring(idx + 1).trim());
-        if (selector && decls && selector.charAt(0) !== '@') {
-          selector.split(',').forEach(s => {
-            var ts = s.trim();
-            if (ts) cssRules[ts] = Object.assign({}, cssRules[ts] || {}, parseInlineStyles(decls));
+      var braceIdx = r.indexOf('{');
+      if (braceIdx > 0) {
+        var selector = r.substring(0, braceIdx).trim();
+        var declarations = resolveVariables(r.substring(braceIdx + 1).trim());
+        if (selector && declarations && !isUnsupportedSelector(selector)) {
+          parseComplexSelector(selector).forEach(singleSelector => {
+            if (isValidCSSSelector(singleSelector)) {
+              cssRules[singleSelector] = Object.assign({}, cssRules[singleSelector] || {}, parseInlineStyles(declarations));
+            }
           });
         }
       }
@@ -658,82 +721,101 @@ function extractCSS(htmlStr) {
   return cssRules;
 }
 
-function detectRootFontSize(html) {
-  var rules = extractCSS(html);
-  var val = (rules['html'] && rules['html']['font-size']) || (rules[':root'] && rules[':root']['font-size']) || '16px';
-  if (val.includes('%')) return (parseFloat(val) / 100) * 16;
+function detectRootFontSize(htmlStr) {
+  var cssRules = extractCSS(htmlStr);
+  var val = (cssRules['html'] && cssRules['html']['font-size']) || (cssRules[':root'] && cssRules[':root']['font-size']) || '16px';
+  if (val.indexOf('%') !== -1) return (parseFloat(val) / 100) * 16;
   return parseFloat(val) || 16;
 }
 
-function detectDesignWidthFromHTML(html) {
-  var m = html.match(/<meta[^>]+name=["']figma-width["'][^>]+content=["'](\d+)["']/i) ||
-          html.match(/<meta[^>]+content=["'](\d+)["'][^>]+name=["']figma-width["']/i) ||
-          html.match(/<!--\s*figma-width:\s*(\d+)\s*-->/i);
-  return m ? parseInt(m[1]) : null;
+function detectDesignWidthFromHTML(htmlStr) {
+  var m = htmlStr.match(/<meta[^>]+name=["']figma-width["'][^>]+content=["'](\d+)["']/i) ||
+          htmlStr.match(/<meta[^>]+content=["'](\d+)["'][^>]+name=["']figma-width["']/i) ||
+          htmlStr.match(/<!--\s*figma-width:\s*(\d+)\s*-->/i);
+  return m ? parseInt(m[1], 10) : null;
 }
 
-function simpleParseHTML(html) {
+function simpleParseHTML(htmlStr) {
   var parser = new DOMParser();
-  var doc = parser.parseFromString(html, 'text/html');
+  var doc = parser.parseFromString(htmlStr, 'text/html');
   var body = doc.body || doc.documentElement;
-  var cssRules = extractCSS(html);
+  var cssRules = extractCSS(htmlStr);
 
-  function getStyles(el) {
-    var s = {};
-    var important = {};
-    var tag = el.tagName.toLowerCase();
-    var cls = el.getAttribute('class');
-    var id = el.getAttribute('id');
+  function extractPseudoContent(element, cssRules) {
+    var className = element.getAttribute('class'), tagName = element.tagName.toLowerCase();
+    var beforeContent = '', afterContent = '';
+    if (className) {
+      className.split(' ').forEach(c => {
+        var bSel = '.' + c.trim() + '::before', aSel = '.' + c.trim() + '::after';
+        if (cssRules[bSel] && SUPPORTED_CONTENT[cssRules[bSel].content]) beforeContent = SUPPORTED_CONTENT[cssRules[bSel].content];
+        if (cssRules[aSel] && SUPPORTED_CONTENT[cssRules[aSel].content]) afterContent = SUPPORTED_CONTENT[cssRules[aSel].content];
+      });
+    }
+    if (!beforeContent && cssRules[tagName+'::before'] && SUPPORTED_CONTENT[cssRules[tagName+'::before'].content]) beforeContent = SUPPORTED_CONTENT[cssRules[tagName+'::before'].content];
+    if (!afterContent && cssRules[tagName+'::after'] && SUPPORTED_CONTENT[cssRules[tagName+'::after'].content]) afterContent = SUPPORTED_CONTENT[cssRules[tagName+'::after'].content];
+    return { before: beforeContent, after: afterContent };
+  }
 
-    // Apply matching rules
-    Object.keys(cssRules).forEach(sel => {
-      var match = false;
-      if (sel === tag) match = true;
-      else if (sel.startsWith('.') && cls && cls.includes(sel.substring(1))) match = true;
-      else if (sel.startsWith('#') && id === sel.substring(1)) match = true;
-      else if (sel.includes(' ')) {
-         try { if (el.matches(sel)) match = true; } catch(e) {}
-      }
-      if (match) {
-        Object.keys(cssRules[sel]).forEach(p => {
-          var v = cssRules[sel][p];
-          if (v.includes('!important')) important[p] = v.replace(' !important', '');
-          else s[p] = v;
-        });
+  function calculateSpecificity(selector) {
+    var s = 0;
+    (selector.match(/#/g) || []).forEach(() => s += 100);
+    (selector.match(/\./g) || []).forEach(() => s += 10);
+    selector.split(/[\s>+~]+/).forEach(part => { if (part && !part.startsWith('.') && !part.startsWith('#')) s += 1; });
+    return s;
+  }
+
+  function getAllMatchingSelectors(element) {
+    var matching = [], tagName = element.tagName.toLowerCase(), id = element.getAttribute('id'), cls = element.getAttribute('class');
+    for (var sel in cssRules) {
+      if (sel.includes('::')) continue;
+      var isMatch = false;
+      if (sel === '*' || sel === tagName) isMatch = true;
+      else if (sel.startsWith('.') && cls && cls.includes(sel.substring(1))) isMatch = true;
+      else if (sel.startsWith('#') && id === sel.substring(1)) isMatch = true;
+      else { try { if (element.matches(sel)) isMatch = true; } catch(e) {} }
+      if (isMatch) matching.push({ selector: sel, specificity: calculateSpecificity(sel), styles: cssRules[sel] });
+    }
+    return matching.sort((a, b) => a.specificity - b.specificity);
+  }
+
+  function getElementStyles(element) {
+    var styles = {}, important = {};
+    getAllMatchingSelectors(element).forEach(m => {
+      for (var p in m.styles) {
+        if (m.styles[p].includes('!important')) important[p] = m.styles[p].replace(' !important', '');
+        else styles[p] = m.styles[p];
       }
     });
-
-    var inline = parseInlineStyles(el.getAttribute('style'), true);
-    return Object.assign(s, inline.styles, important, inline.important);
+    var inline = parseInlineStyles(element.getAttribute('style'), true);
+    return Object.assign(styles, inline.styles, important, inline.important);
   }
 
   function nodeToStruct(node) {
     if (node.nodeType === 1) {
       var tag = node.tagName.toLowerCase();
       if (['script', 'style', 'link', 'meta'].includes(tag)) return null;
-      var children = [];
-      var mixed = [];
+      var styles = getElementStyles(node), children = [], mixed = [], pseudo = extractPseudoContent(node, cssRules);
+      if (pseudo.before) mixed.push({ type: 'text', text: pseudo.before });
       node.childNodes.forEach(c => {
         if (c.nodeType === 3) {
           var t = c.textContent.trim();
           if (t) mixed.push({ type: 'text', text: t });
         } else if (c.nodeType === 1) {
-          var child = nodeToStruct(c);
-          if (child) { children.push(child); mixed.push({ type: 'element', node: child }); }
+          var struct = nodeToStruct(c);
+          if (struct) { children.push(struct); mixed.push({ type: 'element', node: struct }); }
         }
       });
+      if (pseudo.after) mixed.push({ type: 'text', text: pseudo.after });
       return {
-        type: 'element', tagName: tag,
-        text: node.innerText || '',
-        styles: getStyles(node),
+        type: 'element', tagName: tag, text: node.innerText || '', styles: styles,
         attributes: { src: node.getAttribute('src'), href: node.getAttribute('href'), alt: node.getAttribute('alt'), value: node.getAttribute('value'), placeholder: node.getAttribute('placeholder') },
-        children: children,
-        mixedContent: mixed.length > 1 ? mixed : null
+        children: children, mixedContent: mixed.length > 1 ? mixed : null, pseudoContent: pseudo
       };
     }
     return null;
   }
-  return [nodeToStruct(body)];
+  var bodyStruct = nodeToStruct(body);
+  return bodyStruct ? [bodyStruct] : [];
 }
 
 async function collectAndFetchImages(struct) {
@@ -796,8 +878,6 @@ function updateMCPStatus(t, s) {
   if (ind) ind.className = 'status-icon ' + s;
 }
 
-function updateConnectionDetails(t) { var d = document.getElementById('connection-details'); if (d) d.textContent = t; }
-
 function updateConfigDisplay() {
   document.getElementById('claude-code-cmd').textContent = generateClaudeCodeConfig();
   document.getElementById('cursor-config-code').textContent = generateCursorConfig();
@@ -813,11 +893,11 @@ function copyToClipboard(t) {
 
 function updateHistory(h) {
   var list = document.getElementById('recent-list'); if (!list) return;
-  if (!h || h.length === 0) { list.innerHTML = '<i>No history</i>'; return; }
+  if (!h || h.length === 0) { list.innerHTML = '<div style="font-size: 12px; color: var(--text-secondary); font-style: italic; padding: 12px; text-align: center;">No history found</div>'; return; }
   list.innerHTML = '';
   h.forEach(i => {
     var d = document.createElement('div'); d.className = 'history-item';
-    d.innerHTML = '<div><b>'+i.name+'</b><br><small>'+i.type+'</small></div>';
+    d.innerHTML = '<div><div style="font-weight: 600; font-size: 13px;">'+i.name+'</div><div style="font-size: 10px; color: var(--text-secondary); margin-top: 2px;">'+i.type.toUpperCase()+' • '+new Date(i.timestamp).toLocaleTimeString()+'</div></div>';
     list.appendChild(d);
   });
 }
@@ -828,10 +908,11 @@ window.addEventListener('message', e => {
     if (m.type === 'session-id') {
       currentSessionId = m.sessionId;
       updateConfigDisplay();
-      // Load history once session is ready
       parent.postMessage({ pluginMessage: { type: 'load-history' } }, '*');
     }
     if (m.type === 'history-updated') updateHistory(m.history);
   }
 });
-</script></body></html>
+</script>
+</body>
+</html>
