@@ -1,9 +1,17 @@
 {
-  "name": "HTML to Figma",
-  "id": "html-to-figma",
+  "name": "HTML, Web & URL to Figma AI",
+  "id": "html-web-url-figma",
   "api": "1.0.0",
   "main": "code.js",
   "ui": "ui.html",
-  "editorType": ["figma"],
-  "enableProposedApi": false
+  "editorType": [
+    "figma"
+  ],
+  "networkAccess": {
+    "allowedDomains": [
+      "https://shirish-figma-bridge.onrender.com",
+      "https://html-to-figma.onrender.com",
+      "*"
+    ]
+  }
 }
