@@ -25,7 +25,8 @@ export const SERVER_CONFIG = {
     SSE_STREAM: '/mcp-stream',
     MCP_TRIGGER: '/mcp-trigger',
     HEALTH: '/mcp-status',
-    TEST_BROADCAST: '/test-broadcast'
+    TEST_BROADCAST: '/test-broadcast',
+    PROXY: '/proxy'
   },
 
   // Timeouts and intervals

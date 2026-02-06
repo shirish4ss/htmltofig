@@ -116,6 +116,12 @@ class FigmaSSEServer {
         return;
       }
 
+      // URL Proxy endpoint (to bypass CORS)
+      if (parsedUrl.pathname === SERVER_CONFIG.ENDPOINTS.PROXY) {
+        this.handleProxyRequest(req, res);
+        return;
+      }
+
       // Status endpoint
       if (parsedUrl.pathname === SERVER_CONFIG.ENDPOINTS.HEALTH) {
         res.writeHead(200, {
@@ -319,6 +325,49 @@ class FigmaSSEServer {
   // Get list of active session IDs
   getActiveSessions() {
     return Array.from(this.sseConnections.keys());
+  }
+
+  // Handle URL proxy request to bypass CORS
+  async handleProxyRequest(req, res) {
+    const parsedUrl = url.parse(req.url, true);
+    const targetUrl = parsedUrl.query.url;
+
+    if (!targetUrl) {
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: 'url query parameter is required' }));
+      return;
+    }
+
+    console.log(`[SSE-SERVER] Proxying request for URL: ${targetUrl}`);
+
+    try {
+      const response = await fetch(targetUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
+        },
+        signal: AbortSignal.timeout(10000) // 10 second timeout
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
+      }
+
+      const contentType = response.headers.get('content-type');
+      const text = await response.text();
+
+      res.writeHead(200, {
+        'Content-Type': contentType || 'text/html',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Expose-Headers': 'X-Proxied-Url',
+        'X-Proxied-Url': targetUrl
+      });
+      res.end(text);
+    } catch (error) {
+      console.error(`[SSE-SERVER] Proxy error for ${targetUrl}:`, error.message);
+      res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: error.message }));
+    }
   }
 
   async start() {

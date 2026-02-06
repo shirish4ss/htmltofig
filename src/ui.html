@@ -343,6 +343,7 @@
           </div>
         </div>
         <button id="upload-convert-btn" class="button" disabled>Convert Import</button>
+        <div id="import-status" style="margin-top: 12px; font-size: 11px; color: var(--text-secondary); text-align: center; display: none;">Ready</div>
       </div>
 
       <div class="history-section">
@@ -1442,7 +1443,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     try {
       var structure = simpleParseHTML(val);
-      await collectAndFetchImages(structure);
+      await collectAndFetchImages(structure, null);
       var detectedWidth = detectDesignWidthFromHTML(val);
       var detectedRemBase = detectRootFontSize(val);
 
@@ -1463,17 +1464,61 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // URL Import button
   var uploadedContent = null;
+  var lastFetchedUrl = null;
   document.getElementById('url-import-btn').onclick = function() {
     var url = document.getElementById('url-input').value;
     if (!url) return;
     if (!url.startsWith('http')) url = 'https://' + url;
-    updateConnectionDetails('Fetching ' + url + '...');
-    fetch(url).then(function(r) { return r.text(); }).then(function(text) {
+
+    // Use the proxy endpoint on our server to bypass CORS
+    var proxyUrl = MCP_SERVER_URL + '/proxy?url=' + encodeURIComponent(url);
+
+    updateConnectionDetails('Fetching via proxy: ' + url + '...');
+
+    fetch(proxyUrl).then(function(r) {
+      if (!r.ok) throw new Error('Proxy server error: ' + r.status);
+      return r.text();
+    }).then(async function(text) {
       uploadedContent = text;
+      lastFetchedUrl = url;
+
+      updateConnectionDetails('Processing stylesheets...');
+
+      // Attempt to fetch external stylesheets to ensure styles are converted
+      try {
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(text, 'text/html');
+        var links = doc.querySelectorAll('link[rel="stylesheet"]');
+        var stylePromises = [];
+
+        for (var i = 0; i < links.length; i++) {
+          var href = links[i].getAttribute('href');
+          if (href) {
+            try {
+              var fullHref = new URL(href, url).href;
+              var pUrl = MCP_SERVER_URL + '/proxy?url=' + encodeURIComponent(fullHref);
+              stylePromises.push(fetch(pUrl).then(function(r) { return r.ok ? r.text() : ''; }).catch(function() { return ''; }));
+            } catch(e) {}
+          }
+        }
+
+        if (stylePromises.length > 0) {
+          var styles = await Promise.all(stylePromises);
+          var combinedStyles = styles.join('\n');
+          if (combinedStyles.trim()) {
+            uploadedContent += '\n<style>\n' + combinedStyles + '\n</style>';
+          }
+        }
+      } catch(e) {
+        console.warn('Failed to fetch external stylesheets:', e);
+      }
+
       document.getElementById('upload-convert-btn').disabled = false;
-      updateConnectionDetails('Fetched successfully!');
+      updateConnectionDetails('Ready to convert!');
+      alert('Page fetched successfully with styles! Click "Convert Import" below to convert it.');
     }).catch(function(e) {
-      alert('CORS limitation: Please paste the HTML code directly into the "Paste HTML" tab if fetch fails.');
+      console.error('Fetch error:', e);
+      alert('Fetch failed: ' + e.message + '\n\nPlease ensure your server is running or paste the HTML code directly into the "Paste HTML" tab.');
       updateConnectionDetails('Fetch failed');
     });
   };
@@ -1501,7 +1546,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     try {
       var structure = simpleParseHTML(uploadedContent);
-      await collectAndFetchImages(structure);
+      await collectAndFetchImages(structure, lastFetchedUrl);
       parent.postMessage({ pluginMessage: {
         type: 'html-structure', structure: structure,
         name: 'Imported Page', sourceType: 'url'
@@ -1548,25 +1593,55 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('minimized-expand-btn').onclick = toggleMinimize;
 });
 
-// Image fetching logic
-async function collectAndFetchImages(struct) {
+// Image fetching logic with CORS proxy fallback and relative URL resolution
+async function collectAndFetchImages(struct, baseUrl) {
   async function traverse(nodes) {
     if (!nodes) return;
     for (let n of nodes) {
       if (n.tagName === 'img' && n.attributes && n.attributes.src) {
+        let src = n.attributes.src;
+
+        // Resolve relative URLs if baseUrl is provided
+        if (baseUrl && !src.startsWith('http') && !src.startsWith('data:')) {
+          try {
+            src = new URL(src, baseUrl).href;
+            n.attributes.src = src; // Update the src to full URL
+          } catch(e) {
+            console.warn('Failed to resolve relative URL:', src, baseUrl);
+          }
+        }
+
+        if (src.startsWith('data:')) continue;
+
         try {
-          let r = await fetch(n.attributes.src);
-          if (r.ok) {
+          updateConnectionDetails('Fetching image: ' + (src.length > 40 ? src.substring(0, 37) + '...' : src));
+
+          // Try direct fetch first
+          let r;
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
+            r = await fetch(src, { signal: controller.signal });
+            clearTimeout(timeoutId);
+          } catch(e) {
+            // If direct fetch fails (CORS or timeout), use proxy
+            console.log('Direct image fetch failed, using proxy:', src);
+            const proxyUrl = MCP_SERVER_URL + '/proxy?url=' + encodeURIComponent(src);
+            r = await fetch(proxyUrl);
+          }
+
+          if (r && r.ok) {
             n.imageData = Array.from(new Uint8Array(await r.arrayBuffer()));
           }
         } catch(e) {
-          console.warn('Failed to fetch image:', n.attributes.src);
+          console.warn('Failed to fetch image after proxy attempt:', src);
         }
       }
       if (n.children) await traverse(n.children);
     }
   }
   await traverse(struct);
+  updateConnectionDetails('All images processed');
 }
 
 // SSE Status Updates
@@ -1580,7 +1655,15 @@ function updateMCPStatus(t, s) {
   if (txt) txt.textContent = t;
   if (ind) ind.className = 'status-icon ' + s;
 }
-function updateConnectionDetails(t) { var d = document.getElementById('connection-details'); if (d) d.textContent = t; }
+function updateConnectionDetails(t) {
+  var d = document.getElementById('connection-details');
+  if (d) d.textContent = t;
+  var imp = document.getElementById('import-status');
+  if (imp) {
+    imp.textContent = t;
+    imp.style.display = 'block';
+  }
+}
 
 function updateHistory(history) {
   var list = document.getElementById('recent-list'); if (!list) return;
@@ -1605,7 +1688,7 @@ window.onmessage = async function(event) {
   if (msg.type === 'parse-mcp-html') {
     try {
       var struct = simpleParseHTML(msg.html);
-      await collectAndFetchImages(struct);
+      await collectAndFetchImages(struct, msg.baseUrl || null);
       parent.postMessage({ pluginMessage: { type: 'html-structure', structure: struct, name: msg.name, fromMCP: true } }, '*');
     } catch (e) {
       console.error('Error parsing MCP HTML:', e);
