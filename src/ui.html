@@ -1668,15 +1668,24 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!uploadedContent) return;
 
     var btn = document.getElementById('upload-convert-btn');
+    var oldHtml = btn.innerHTML;
     btn.disabled = true;
     btn.textContent = 'Converting...';
 
     try {
       var structure = simpleParseHTML(uploadedContent);
       await collectAndFetchImages(structure, lastFetchedUrl);
+
+      var detectedWidth = detectDesignWidthFromHTML(uploadedContent);
+      var detectedRemBase = detectRootFontSize(uploadedContent);
+
       parent.postMessage({ pluginMessage: {
-        type: 'html-structure', structure: structure,
-        name: 'Imported Page', sourceType: 'url'
+        type: 'html-structure',
+        structure: structure,
+        detectedWidth: detectedWidth,
+        detectedRemBase: detectedRemBase,
+        name: 'Imported Page',
+        sourceType: 'url'
       } }, '*');
     } catch(e) {
       console.error(e);

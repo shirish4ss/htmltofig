@@ -91,9 +91,20 @@ class FigmaSSEServer {
 
   setupSSEServer() {
     this.httpServer = http.createServer((req, res) => {
-      const parsedUrl = url.parse(req.url, true);
+      // Use URL class for more robust parsing
+      const protocol = req.headers['x-forwarded-proto'] || 'http';
+      const host = req.headers.host || 'localhost';
+      const fullUrl = new URL(req.url, `${protocol}://${host}`);
+
+      const parsedUrl = {
+        pathname: fullUrl.pathname,
+        query: Object.fromEntries(fullUrl.searchParams)
+      };
+
       // Normalize pathname: remove trailing slashes and multiple slashes
       const pathname = (parsedUrl.pathname || '/').replace(/\/+/g, '/').replace(/\/+$/, '') || '/';
+
+      console.log(`[SSE-SERVER] ${req.method} ${req.url} -> Pathname: ${pathname}`);
 
       // Handle CORS preflight
       if (req.method === 'OPTIONS') {
@@ -108,7 +119,7 @@ class FigmaSSEServer {
 
       // SSE Endpoint
       if (pathname === SERVER_CONFIG.ENDPOINTS.SSE_STREAM) {
-        this.handleSSEConnection(req, res);
+        this.handleSSEConnection(req, res, parsedUrl.query);
         return;
       }
 
@@ -120,7 +131,7 @@ class FigmaSSEServer {
 
       // URL Proxy endpoint (to bypass CORS)
       if (pathname === SERVER_CONFIG.ENDPOINTS.PROXY) {
-        this.handleProxyRequest(req, res);
+        this.handleProxyRequest(req, res, parsedUrl.query);
         return;
       }
 
@@ -143,7 +154,7 @@ class FigmaSSEServer {
       }
 
       // Test broadcast endpoint
-      if (parsedUrl.pathname === SERVER_CONFIG.ENDPOINTS.TEST_BROADCAST) {
+      if (pathname === SERVER_CONFIG.ENDPOINTS.TEST_BROADCAST) {
         const testMessage = {
           type: 'test-message',
           message: 'SSE server test broadcast',
@@ -188,10 +199,9 @@ class FigmaSSEServer {
     });
   }
 
-  handleSSEConnection(req, res) {
+  handleSSEConnection(req, res, query) {
     // Extract sessionId from query params
-    const parsedUrl = url.parse(req.url, true);
-    const sessionId = parsedUrl.query.sessionId;
+    const sessionId = query.sessionId;
 
     if (!sessionId) {
       console.log('[SSE-SERVER] Connection rejected: No sessionId provided');
@@ -342,9 +352,8 @@ class FigmaSSEServer {
   }
 
   // Handle URL proxy request to bypass CORS
-  async handleProxyRequest(req, res) {
-    const parsedUrl = url.parse(req.url, true);
-    const targetUrl = parsedUrl.query.url;
+  async handleProxyRequest(req, res, query) {
+    const targetUrl = query.url;
 
     if (!targetUrl) {
       res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
@@ -355,31 +364,51 @@ class FigmaSSEServer {
     console.log(`[SSE-SERVER] Proxying request for URL: ${targetUrl}`);
 
     try {
+      // Use a more modern and complete User-Agent
       const response = await fetch(targetUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
         },
-        signal: AbortSignal.timeout(10000) // 10 second timeout
+        redirect: 'follow', // Explicitly follow redirects
+        signal: AbortSignal.timeout(15000) // Increase timeout to 15 seconds
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
+        const errorText = await response.text().catch(() => '');
+        console.error(`[SSE-SERVER] Proxy target error: ${response.status} for ${targetUrl}`);
+        res.writeHead(response.status >= 400 && response.status < 600 ? response.status : 500, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        });
+        res.end(JSON.stringify({
+          error: `Target server returned ${response.status}`,
+          details: errorText.substring(0, 200)
+        }));
+        return;
       }
 
       const contentType = response.headers.get('content-type');
-      const text = await response.text();
+      const buffer = await response.arrayBuffer();
 
       res.writeHead(200, {
         'Content-Type': contentType || 'text/html',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Expose-Headers': 'X-Proxied-Url',
-        'X-Proxied-Url': targetUrl
+        'X-Proxied-Url': targetUrl,
+        'Cache-Control': 'no-store'
       });
-      res.end(text);
+      res.end(Buffer.from(buffer));
+      console.log(`[SSE-SERVER] Proxy successful: ${targetUrl} (${contentType})`);
     } catch (error) {
-      console.error(`[SSE-SERVER] Proxy error for ${targetUrl}:`, error.message);
-      res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      console.error(`[SSE-SERVER] Proxy error for ${targetUrl}:`, error.name === 'TimeoutError' ? 'Timeout' : error.message);
+      res.writeHead(error.name === 'TimeoutError' ? 504 : 500, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      });
       res.end(JSON.stringify({ error: error.message }));
     }
   }

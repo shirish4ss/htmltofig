@@ -2047,6 +2047,8 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
           'text-indent': node.styles?.['text-indent'] || inheritedStyles?.['text-indent'],
           'direction': node.styles?.['direction'] || inheritedStyles?.['direction'],
           'visibility': node.styles?.['visibility'] || inheritedStyles?.['visibility'],
+            'cursor': node.styles?.['cursor'] || inheritedStyles?.['cursor'],
+            'list-style': node.styles?.['list-style'] || inheritedStyles?.['list-style'],
 
           // FIXED: Don't inherit background/background-color - only pass info for gradient container detection
           'parent-has-gradient': (node.styles?.['background'] && node.styles['background'].includes('linear-gradient')) ||
@@ -2197,6 +2199,8 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
         if (parentFrame && (parentFrame.layoutMode === 'HORIZONTAL' || parentFrame.layoutMode === 'VERTICAL')) {
           const flexValue = node.styles?.flex;
           const flexGrowValue = node.styles?.['flex-grow'];
+          const flexShrinkValue = node.styles?.['flex-shrink'];
+          const alignSelf = node.styles?.['align-self'];
 
           // Parse flex shorthand: flex: grow shrink basis (e.g., "0 0 auto", "1", "1 1 0%")
           let shouldGrow = false;
@@ -2222,18 +2226,21 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
           try {
             if (shouldGrow) {
               frame.layoutGrow = 1;
-              frame.layoutSizingHorizontal = 'FILL';
-              frame.layoutSizingVertical = 'HUG';
-            } else if (shouldNotGrow) {
-              // flex: 0 or flex: 0 0 auto - item should NOT grow, maintain its size
-              frame.layoutGrow = 0;
-              // Use min-width if set, otherwise HUG
-              const minWidth = parseSize(node.styles?.['min-width']);
-              if (minWidth && minWidth > 0) {
-                frame.layoutSizingHorizontal = 'FIXED';
-                frame.resize(Math.max(frame.width, minWidth), frame.height);
+              if (parentFrame.layoutMode === 'HORIZONTAL') {
+                frame.layoutSizingHorizontal = 'FILL';
               } else {
-                frame.layoutSizingHorizontal = 'HUG';
+                frame.layoutSizingVertical = 'FILL';
+              }
+            } else if (shouldNotGrow) {
+              frame.layoutGrow = 0;
+            }
+
+            // Handle align-self and stretch
+            if (alignSelf === 'stretch' || (!alignSelf && inheritedStyles?._parentAlignItems === 'stretch')) {
+              if (parentFrame.layoutMode === 'HORIZONTAL') {
+                frame.layoutSizingVertical = 'FILL';
+              } else {
+                frame.layoutSizingHorizontal = 'FILL';
               }
             }
           } catch (error) {

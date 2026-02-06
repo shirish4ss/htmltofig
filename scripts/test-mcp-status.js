@@ -21,7 +21,7 @@ const files = [
   'mcp-server.js',
   'sse-server.js',
   'code.js',
-  'ui.js',
+  'ui.html',
   'config/server-config.js'
 ];
 
