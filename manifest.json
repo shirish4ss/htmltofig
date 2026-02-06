@@ -10,8 +10,6 @@
   ],
   "networkAccess": {
     "allowedDomains": [
-      "https://shirish-figma-bridge.onrender.com",
-      "https://html-to-figma.onrender.com",
       "*"
     ],
     "reasoning": "Required to fetch images from arbitrary URLs during HTML to Figma conversion and to connect to the AI bridge server."

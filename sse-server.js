@@ -103,6 +103,7 @@ class FigmaSSEServer {
 
       // Normalize pathname: remove trailing slashes and multiple slashes
       const pathname = (parsedUrl.pathname || '/').replace(/\/+/g, '/').replace(/\/+$/, '') || '/';
+      const normalizedPath = pathname.toLowerCase();
 
       console.log(`[SSE-SERVER] ${req.method} ${req.url} -> Pathname: ${pathname}`);
 
@@ -117,26 +118,26 @@ class FigmaSSEServer {
         return;
       }
 
-      // SSE Endpoint
-      if (pathname === SERVER_CONFIG.ENDPOINTS.SSE_STREAM) {
+      // SSE Endpoint - Case-insensitive matching
+      if (normalizedPath === SERVER_CONFIG.ENDPOINTS.SSE_STREAM.toLowerCase()) {
         this.handleSSEConnection(req, res, parsedUrl.query);
         return;
       }
 
       // MCP Trigger endpoint (for MCP server notifications)
-      if (pathname === SERVER_CONFIG.ENDPOINTS.MCP_TRIGGER && req.method === 'POST') {
+      if (normalizedPath === SERVER_CONFIG.ENDPOINTS.MCP_TRIGGER.toLowerCase() && req.method === 'POST') {
         this.handleMCPTrigger(req, res);
         return;
       }
 
-      // URL Proxy endpoint (to bypass CORS)
-      if (pathname === SERVER_CONFIG.ENDPOINTS.PROXY) {
+      // URL Proxy endpoint (to bypass CORS) - Case-insensitive matching
+      if (normalizedPath === SERVER_CONFIG.ENDPOINTS.PROXY.toLowerCase()) {
         this.handleProxyRequest(req, res, parsedUrl.query);
         return;
       }
 
       // Status endpoint
-      if (pathname === SERVER_CONFIG.ENDPOINTS.HEALTH) {
+      if (normalizedPath === SERVER_CONFIG.ENDPOINTS.HEALTH.toLowerCase()) {
         res.writeHead(200, {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': SERVER_CONFIG.ALLOWED_ORIGINS
@@ -154,7 +155,7 @@ class FigmaSSEServer {
       }
 
       // Test broadcast endpoint
-      if (pathname === SERVER_CONFIG.ENDPOINTS.TEST_BROADCAST) {
+      if (normalizedPath === SERVER_CONFIG.ENDPOINTS.TEST_BROADCAST.toLowerCase()) {
         const testMessage = {
           type: 'test-message',
           message: 'SSE server test broadcast',
@@ -354,6 +355,14 @@ class FigmaSSEServer {
   // Handle URL proxy request to bypass CORS
   async handleProxyRequest(req, res, query) {
     const targetUrl = query.url;
+    const apiKey = query.apiKey;
+
+    // Simple security check consistent with other endpoints
+    if (apiKey !== SERVER_CONFIG.API_KEY && apiKey !== 'dev-key') {
+      res.writeHead(401, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: 'Unauthorized: Invalid API Key' }));
+      return;
+    }
 
     if (!targetUrl) {
       res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
@@ -456,4 +465,4 @@ const sseServer = new FigmaSSEServer();
 sseServer.start().catch(error => {
   console.error('[SSE-SERVER] Failed to start:', error);
   process.exit(1);
-}); 
+});

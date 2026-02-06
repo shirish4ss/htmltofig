@@ -56,20 +56,17 @@
     if (COLOR_KEYWORDS[lowerColor]) {
       return COLOR_KEYWORDS[lowerColor];
     }
-    const rgbMatch = color.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/i);
-    if (rgbMatch) {
-      return {
-        r: parseInt(rgbMatch[1]) / 255,
-        g: parseInt(rgbMatch[2]) / 255,
-        b: parseInt(rgbMatch[3]) / 255
-      };
-    }
-    const rgbaMatch = color.match(/rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)/i);
+    const rgbaRegex = /rgba?\(\s*(\d+(?:\.\d+)?%?)(?:\s*,\s*|\s+)(\d+(?:\.\d+)?%?)(?:\s*,\s*|\s+)(\d+(?:\.\d+)?%?)(?:\s*(?:,\s*|\/\s*)([0-9.]+)?%?)?\s*\)/i;
+    const rgbaMatch = color.match(rgbaRegex);
     if (rgbaMatch) {
+      const parseComponent = (val) => {
+        if (val.endsWith("%")) return parseFloat(val) / 100 * 255;
+        return parseFloat(val);
+      };
       return {
-        r: parseInt(rgbaMatch[1]) / 255,
-        g: parseInt(rgbaMatch[2]) / 255,
-        b: parseInt(rgbaMatch[3]) / 255
+        r: parseComponent(rgbaMatch[1]) / 255,
+        g: parseComponent(rgbaMatch[2]) / 255,
+        b: parseComponent(rgbaMatch[3]) / 255
       };
     }
     const hexResult = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(color);
@@ -91,20 +88,27 @@
     return null;
   }
   function hexToRgba(color) {
-    const rgb = hexToRgb(color);
-    if (!rgb) return null;
-    const rgbaMatch = color.match(/rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)/i);
-    if (rgbaMatch) {
-      return {
-        r: parseInt(rgbaMatch[1]) / 255,
-        g: parseInt(rgbaMatch[2]) / 255,
-        b: parseInt(rgbaMatch[3]) / 255,
-        a: parseFloat(rgbaMatch[4])
-      };
-    }
-    if (color.toLowerCase().trim() === "transparent") {
+    const lowerColor = color.toLowerCase().trim();
+    if (lowerColor === "transparent") {
       return { r: 0, g: 0, b: 0, a: 0 };
     }
+    const rgbaRegex = /rgba?\(\s*(\d+(?:\.\d+)?%?)(?:\s*,\s*|\s+)(\d+(?:\.\d+)?%?)(?:\s*,\s*|\s+)(\d+(?:\.\d+)?%?)(?:\s*(?:,\s*|\/\s*)([0-9.]+)?%?)?\s*\)/i;
+    const rgbaMatch = color.match(rgbaRegex);
+    if (rgbaMatch) {
+      const parseComponent = (val) => {
+        if (val.endsWith("%")) return parseFloat(val) / 100 * 255;
+        return parseFloat(val);
+      };
+      const alpha = rgbaMatch[4] ? parseFloat(rgbaMatch[4]) : 1;
+      return {
+        r: parseComponent(rgbaMatch[1]) / 255,
+        g: parseComponent(rgbaMatch[2]) / 255,
+        b: parseComponent(rgbaMatch[3]) / 255,
+        a: alpha
+      };
+    }
+    const rgb = hexToRgb(color);
+    if (!rgb) return null;
     return __spreadProps(__spreadValues({}, rgb), { a: 1 });
   }
   function extractBorderColor(borderValue) {
@@ -320,33 +324,26 @@
 
   // src/utils/effects.ts
   function parseBoxShadow(shadowValue) {
-    const match = shadowValue.match(/(-?\d+(?:\.\d+)?(?:px)?)\s+(-?\d+(?:\.\d+)?(?:px)?)\s+(-?\d+(?:\.\d+)?(?:px)?)?\s*(-?\d+(?:\.\d+)?(?:px)?)?\s*(rgba?\([^)]+\)|#[a-fA-F0-9]{6}|#[a-fA-F0-9]{3})?/);
-    if (match) {
-      const offsetX = parseSize(match[1]) || 0;
-      const offsetY = parseSize(match[2]) || 0;
-      const blurRadius = parseSize(match[3]) || 0;
-      const colorStr = match[5];
-      let color = { r: 0, g: 0, b: 0, a: 0.25 };
-      if (colorStr) {
-        const rgbaMatch = colorStr.match(/rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)/);
-        if (rgbaMatch) {
-          color = {
-            r: parseInt(rgbaMatch[1]) / 255,
-            g: parseInt(rgbaMatch[2]) / 255,
-            b: parseInt(rgbaMatch[3]) / 255,
-            a: parseFloat(rgbaMatch[4])
-          };
-        } else {
-          const rgb = hexToRgb(colorStr);
-          if (rgb) {
-            color = __spreadProps(__spreadValues({}, rgb), { a: 0.25 });
-          }
-        }
-      }
+    if (!shadowValue || shadowValue === "none") return null;
+    const isInset = shadowValue.includes("inset");
+    const cleanShadow = shadowValue.replace("inset", "").trim();
+    const colorRegex = /(rgba?\([^)]+\)|#[a-fA-F0-9]{6}|#[a-fA-F0-9]{3})/;
+    const colorMatch = cleanShadow.match(colorRegex);
+    const colorStr = colorMatch ? colorMatch[1] : null;
+    const remaining = colorStr ? cleanShadow.replace(colorStr, "").trim() : cleanShadow;
+    const numbers = remaining.match(/(-?\d+(?:\.\d+)?(?:px)?)/g);
+    if (numbers && numbers.length >= 2) {
+      const offsetX = parseSize(numbers[0]) || 0;
+      const offsetY = parseSize(numbers[1]) || 0;
+      const blurRadius = numbers[2] ? parseSize(numbers[2]) || 0 : 0;
+      const spread = numbers[3] ? parseSize(numbers[3]) || 0 : 0;
+      const parsedColor = colorStr ? hexToRgba(colorStr) : null;
+      const color = parsedColor || { r: 0, g: 0, b: 0, a: 0.25 };
       return {
-        type: "DROP_SHADOW",
+        type: isInset ? "INNER_SHADOW" : "DROP_SHADOW",
         offset: { x: offsetX, y: offsetY },
         radius: blurRadius,
+        spread,
         color,
         blendMode: "NORMAL",
         visible: true
@@ -916,17 +913,19 @@
           }
         }
       }
-    } else if (styles["background-color"] && styles["background-color"] !== "transparent" || styles["background"] && !styles["background"].includes("gradient") && styles["background"] !== "transparent") {
+    } else if (styles["background-color"] && styles["background-color"] !== "transparent" && styles["background-color"] !== "rgba(0, 0, 0, 0)" || styles["background"] && !styles["background"].includes("gradient") && styles["background"] !== "transparent" && styles["background"] !== "rgba(0, 0, 0, 0)") {
       const bgColorValue = styles["background-color"] || styles["background"];
       const bgColorWithAlpha = hexToRgba(bgColorValue);
-      if (bgColorWithAlpha) {
+      if (bgColorWithAlpha && bgColorWithAlpha.a > 0) {
         frame.fills = [{
           type: "SOLID",
           color: { r: bgColorWithAlpha.r, g: bgColorWithAlpha.g, b: bgColorWithAlpha.b },
           opacity: bgColorWithAlpha.a
         }];
+      } else {
+        frame.fills = [];
       }
-    } else if (!hasExplicitBackground) {
+    } else if (!hasExplicitBackground || styles["background-color"] === "transparent" || styles["background-color"] === "rgba(0, 0, 0, 0)") {
       frame.fills = [];
     }
     if (styles.width) {
@@ -1018,9 +1017,9 @@
       if (filter.blur !== void 0 && filter.blur > 0) {
         effects.push({
           type: "LAYER_BLUR",
-          blurType: "NORMAL",
           radius: filter.blur,
-          visible: true
+          visible: true,
+          blurType: "NORMAL"
         });
       }
       if (filter.dropShadow) {
@@ -1044,9 +1043,9 @@
         const effects = [...frame.effects || []];
         effects.push({
           type: "BACKGROUND_BLUR",
-          blurType: "NORMAL",
           radius: backdropFilter.blur,
-          visible: true
+          visible: true,
+          blurType: "NORMAL"
         });
         frame.effects = effects;
       }
@@ -1768,6 +1767,22 @@
           if (node.styles) {
             applyStylesToFrame(frame, node.styles);
           }
+          if (node.bgImageData) {
+            try {
+              const image = figma.createImage(new Uint8Array(node.bgImageData));
+              const currentFills = Array.isArray(frame.fills) ? [...frame.fills] : [];
+              frame.fills = [
+                ...currentFills,
+                {
+                  type: "IMAGE",
+                  imageHash: image.hash,
+                  scaleMode: "FILL"
+                }
+              ];
+            } catch (error) {
+              console.error("Error applying background image:", error);
+            }
+          }
           if (((_r = node.styles) == null ? void 0 : _r.className) === "detail-label" || ((_s = node.styles) == null ? void 0 : _s.className) === "detail-value") {
           }
           if (parentFrame && parentFrame.getPluginData("textAlign") === "center") {
@@ -2484,7 +2499,21 @@
           const height = parseSize((_Ec = node.styles) == null ? void 0 : _Ec.height) || 150;
           const frame = figma.createFrame();
           frame.resize(width, height);
-          frame.fills = [{ type: "SOLID", color: { r: 0.9, g: 0.9, b: 0.9 } }];
+          if (node.imageData) {
+            try {
+              const image = figma.createImage(new Uint8Array(node.imageData));
+              frame.fills = [{
+                type: "IMAGE",
+                imageHash: image.hash,
+                scaleMode: "FILL"
+              }];
+            } catch (error) {
+              console.error("Error creating image fill:", error);
+              frame.fills = [{ type: "SOLID", color: { r: 0.9, g: 0.9, b: 0.9 } }];
+            }
+          } else {
+            frame.fills = [{ type: "SOLID", color: { r: 0.9, g: 0.9, b: 0.9 } }];
+          }
           frame.name = "Image: " + (((_Fc = node.attributes) == null ? void 0 : _Fc.alt) || "Unnamed");
           frame.layoutMode = "HORIZONTAL";
           frame.primaryAxisAlignItems = "CENTER";

@@ -202,6 +202,9 @@
     .server-badge.prod { background: #10b981; color: white; }
 </style></head>
 <body>
+  <!-- Hidden container for computed style calculation -->
+  <div id="computed-style-container" style="position: absolute; left: -9999px; top: -9999px; visibility: hidden; pointer-events: none;"></div>
+
   <div class="app-wrapper">
     <header>
       <div class="logo-area">
@@ -397,16 +400,12 @@
 
 <script>
 // ===============================================
-// CORE SCRIPT - ABSOLUTELY PRESERVED FROM ORIGINAL
+// CORE SCRIPT - REFACTORED FOR HIGH-FIDELITY
 // ===============================================
 
-// Global variable to control detailed logging
 var detailedLogsEnabled = true;
-
-// Global session ID (received from plugin)
 var currentSessionId = null;
 
-// Copy to clipboard function (works in Figma plugin context)
 function copyToClipboard(text) {
   var textarea = document.createElement('textarea');
   textarea.value = text;
@@ -425,38 +424,26 @@ function copyToClipboard(text) {
   }
 }
 
-// MCP Config - Auto-detect server (localhost first, then production)
 var LOCAL_SERVER = 'http://localhost:3003';
 var PROD_SERVER = 'https://shirish-figma-bridge.onrender.com';
 var LOCAL_API_KEY = 'dev-key';
 var PROD_API_KEY = 'shirish-secure-2026';
 
-// Will be set after detection
 var MCP_SERVER_URL = null;
 var MCP_API_KEY = null;
 var serverDetected = false;
 
-var MCP_GITHUB_REPO = 'github:shirish4ss/htmltofig';
-
-// Auto-detect which server to use
 function detectServer(callback) {
   if (serverDetected) {
     if (callback) callback();
     return;
   }
-
   debugLog('[SERVER] Detecting server...');
-  updateConnectionDetails('Detecting server...');
-
-  // Try localhost first with a short timeout
   var timeoutId = setTimeout(function() {
-    // Timeout - localhost not responding, use production
-    debugLog('[SERVER] Localhost timeout, using production');
     MCP_SERVER_URL = PROD_SERVER;
     MCP_API_KEY = PROD_API_KEY;
     serverDetected = true;
     updateServerBadge('prod');
-    updateConnectionDetails('Using production server');
     if (callback) callback();
   }, 1500);
 
@@ -464,32 +451,25 @@ function detectServer(callback) {
     .then(function(response) {
       if (response.ok) {
         clearTimeout(timeoutId);
-        debugLog('[SERVER] Localhost detected, using local server');
         MCP_SERVER_URL = LOCAL_SERVER;
         MCP_API_KEY = LOCAL_API_KEY;
         serverDetected = true;
         updateServerBadge('local');
-        updateConnectionDetails('Using local server');
         if (callback) callback();
-      } else {
-        throw new Error('Not OK');
-      }
+      } else { throw new Error('Not OK'); }
     })
     .catch(function(error) {
       clearTimeout(timeoutId);
       if (!serverDetected) {
-        debugLog('[SERVER] Localhost not available, using production');
         MCP_SERVER_URL = PROD_SERVER;
         MCP_API_KEY = PROD_API_KEY;
         serverDetected = true;
         updateServerBadge('prod');
-        updateConnectionDetails('Using production server');
         if (callback) callback();
       }
     });
 }
 
-// Update server badge display
 function updateServerBadge(type) {
   var badge = document.getElementById('server-badge');
   if (badge) {
@@ -498,983 +478,190 @@ function updateServerBadge(type) {
     badge.textContent = type === 'local' ? 'LOCAL' : 'PROD';
   }
   var display = document.getElementById('current-server-display');
-  if (display) {
-    display.textContent = MCP_SERVER_URL;
-  }
-  var input = document.getElementById('manual-server-input');
-  if (input && !input.value) {
-    input.value = MCP_SERVER_URL;
-  }
+  if (display) display.textContent = MCP_SERVER_URL;
 }
 
-// Generate Claude Code config JSON for ~/.claude.json (with mcpServers wrapper)
-function generateClaudeCodeConfig() {
-  return JSON.stringify({
-    "mcpServers": {
-      "figma-html-bridge": {
-        "command": "npx",
-        "args": ["-y", MCP_GITHUB_REPO],
-        "env": {
-          "FIGMA_SERVER_URL": PROD_SERVER,
-          "FIGMA_SESSION_ID": currentSessionId || "YOUR_SESSION_ID",
-          "API_KEY": PROD_API_KEY
-        }
-      }
-    }
-  }, null, 2);
-}
-
-// Generate Cursor/Desktop config JSON for ~/.cursor/mcp.json (without wrapper)
-function generateCursorConfig() {
-  return JSON.stringify({
-    "figma-html-bridge": {
-      "command": "npx",
-      "args": ["-y", MCP_GITHUB_REPO],
-      "env": {
-        "FIGMA_SERVER_URL": PROD_SERVER,
-        "FIGMA_SESSION_ID": currentSessionId || "YOUR_SESSION_ID",
-        "API_KEY": PROD_API_KEY
-      }
-    }
-  }, null, 2);
-}
-
-// Update config display when session ID changes
-function updateConfigDisplay() {
-  var claudeConfig = document.getElementById('claude-code-cmd');
-  var cursorConfig = document.getElementById('cursor-config-code');
-  if (claudeConfig) {
-    claudeConfig.textContent = generateClaudeCodeConfig();
-  }
-  if (cursorConfig) {
-    cursorConfig.textContent = generateCursorConfig();
-  }
-}
-
-// Function for conditional debugging logs
 function debugLog(...args) {
-  if (detailedLogsEnabled) {
-    console.log(...args);
-  }
+  if (detailedLogsEnabled) console.log(...args);
 }
 
-// Essential CSS properties that Figma doesn't support
-var UNSUPPORTED_CSS_PROPERTIES = [
-  'animation', 'animation-name', 'animation-duration', 'animation-timing-function',
-  'animation-delay', 'animation-iteration-count', 'animation-direction',
-  'animation-fill-mode', 'animation-play-state', 'transition', 'transition-property',
-  'transition-duration', 'transition-timing-function', 'transition-delay'
-  // Note: 'transform' removed - now supported (rotate, scale, translate)
-];
+// Extraction logic using getComputedStyle
+function getElementStyles(element) {
+  const computed = window.getComputedStyle(element);
+  const styles = {};
 
-// Supported content for pseudo-elements
-var SUPPORTED_CONTENT = {
-  '"📚"': '📚', '"💬"': '💬', '"🏛️"': '🏛️', '"⚽"': '⚽', '"🏠"': '🏠', '"👥"': '👥',
-  '"📈"': '📈', '"📖"': '📖', '"★"': '★', '"•"': '•', '"→"': '→', '"←"': '←',
-  '"▼"': '▼', '"▲"': '▲', '"✓"': '✓', '"✗"': '✗', '"💡"': '💡', '"🎯"': '🎯',
-  '"📅"': '📅', '"🕐"': '🕐', '"⏱️"': '⏱️', '"📊"': '📊', '"📝"': '📝',
-  '"🏟️"': '🏟️', '"📍"': '📍', '"🏢"': '🏢', '""': ''
-};
+  // List of styles we care about for Figma
+  const props = [
+    'display', 'flex-direction', 'flex-wrap', 'flex-grow', 'flex-shrink', 'flex-basis',
+    'justify-content', 'align-items', 'align-self', 'gap',
+    'width', 'height', 'min-width', 'max-width', 'min-height', 'max-height',
+    'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+    'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+    'position', 'top', 'right', 'bottom', 'left', 'z-index',
+    'background-color', 'background-image', 'background-size', 'background-position',
+    'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+    'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+    'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style',
+    'border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius',
+    'color', 'font-family', 'font-size', 'font-weight', 'font-style', 'line-height',
+    'text-align', 'text-decoration', 'text-transform', 'letter-spacing', 'white-space', 'opacity',
+    'box-shadow', 'filter', 'backdrop-filter', 'clip-path', 'visibility', 'overflow'
+  ];
 
-// CSS filtering and parsing functions
-function filterUnsupportedCSS(styles) {
-  var filteredStyles = {};
-  for (var prop in styles) {
-    if (styles.hasOwnProperty(prop)) {
-      if (prop === 'content') {
-        var contentValue = styles[prop];
-        if (SUPPORTED_CONTENT.hasOwnProperty(contentValue)) {
-          filteredStyles[prop] = styles[prop];
-        }
-      } else if (UNSUPPORTED_CSS_PROPERTIES.indexOf(prop) === -1) {
-        filteredStyles[prop] = styles[prop];
-      }
-    }
+  for (const prop of props) {
+    styles[prop] = computed.getPropertyValue(prop);
   }
-  return filteredStyles;
+
+  // Add class and id for layout analysis in code.ts
+  styles['class'] = element.className || '';
+  styles['id'] = element.id || '';
+
+  // Special handling for shorthand background which might contain gradients
+  styles['background'] = computed.getPropertyValue('background');
+
+  return styles;
 }
 
-function parseInlineStyles(styleStr, trackImportant) {
-  var styles = {};
-  var importantStyles = {}; // Track !important properties separately
-  if (!styleStr) return trackImportant ? { styles: styles, important: importantStyles } : styles;
-  var declarations = styleStr.split(';');
-  for (var i = 0; i < declarations.length; i++) {
-    var decl = declarations[i].trim();
-    if (decl) {
-      var colonIdx = decl.indexOf(':');
-      if (colonIdx > 0) {
-        // Normalize property names to lowercase for consistency
-        var prop = decl.substring(0, colonIdx).trim().toLowerCase();
-        var val = decl.substring(colonIdx + 1).trim();
+async function simpleParseHTML(htmlStr, additionalCss) {
+  const container = document.getElementById('computed-style-container');
 
-        // Check for and strip !important, tracking it separately
-        var isImportant = val.indexOf('!important') !== -1;
-        if (isImportant) {
-          val = val.replace(/\s*!important\s*/gi, '').trim();
-        }
+  // 1. Extract and inject external dependencies (Tailwind, fonts, etc.)
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(htmlStr, 'text/html');
 
-        if (isImportant) {
-          importantStyles[prop] = val;
-        } else {
-          styles[prop] = val;
-        }
+  // Extract <link> and <script> tags
+  const links = Array.from(doc.querySelectorAll('link[rel="stylesheet"], script[src]'));
+  const loadPromises = [];
 
-        // Parse 'font' shorthand to extract font-size
-        // font: [style] [variant] [weight] [stretch] size[/line-height] family
-        if (prop === 'font' && val) {
-          var fontMatch = val.match(/(?:^|\s)(\d+(?:\.\d+)?(?:px|rem|em|pt|vh|vw|%)?)\s*(?:\/\s*[\d.]+(?:px|rem|em|%|[a-z]+)?)?\s+/i);
-          if (fontMatch && !styles['font-size'] && !importantStyles['font-size']) {
-            if (isImportant) {
-              importantStyles['font-size'] = fontMatch[1];
-            } else {
-              styles['font-size'] = fontMatch[1];
-            }
-          }
-        }
-      }
-    }
-  }
+  links.forEach(node => {
+    const clone = document.createElement(node.tagName);
+    Array.from(node.attributes).forEach(attr => clone.setAttribute(attr.name, attr.value));
 
-  if (trackImportant) {
-    return {
-      styles: filterUnsupportedCSS(styles),
-      important: filterUnsupportedCSS(importantStyles)
-    };
-  }
-
-  // For CSS rules storage: preserve !important marker in values
-  // This allows getElementStyles to detect !important later
-  var result = filterUnsupportedCSS(styles);
-  var importantFiltered = filterUnsupportedCSS(importantStyles);
-  for (var key in importantFiltered) {
-    if (importantFiltered.hasOwnProperty(key)) {
-      // Re-add !important marker so it can be detected in getElementStyles
-      result[key] = importantFiltered[key] + ' !important';
-    }
-  }
-  return result;
-}
-
-// Función para verificar si un selector CSS es problemático
-function isUnsupportedSelector(selector) {
-  // Omitir @keyframes, @media, etc.
-  if (selector.charAt(0) === '@') {
-    return true;
-  }
-
-  // Omitir pseudo-selectores problemáticos (excepto ::before/::after que ahora soportamos)
-  if (selector.includes(':hover') ||
-      selector.includes(':active') ||
-      selector.includes(':focus') ||
-      selector.includes(':nth-child') ||
-      selector.includes(':first-child') ||
-      selector.includes(':last-child')) {
-    return true;
-  }
-
-  // Permitir ::before y ::after (ahora los soportamos parcialmente)
-  return false;
-}
-
-// Función mejorada para manejar selectores CSS complejos
-function parseComplexSelector(selector) {
-  // Limpiar espacios extra (sin regex problemático)
-  selector = selector.split(/[ ]+/).join(' ').trim();
-
-  // Manejar múltiples selectores separados por coma
-  if (selector.indexOf(',') !== -1) {
-    return selector.split(',').map(function(s) { return s.trim(); });
-  }
-
-  return [selector];
-}
-
-// Función mejorada para validar selectores CSS
-function isValidCSSSelector(selector) {
-  // Validación simplificada sin regex complejos
-  if (!selector || selector.length === 0) return false;
-
-  // Selector de elemento simple (h1, div, span)
-  if (/^[a-zA-Z][a-zA-Z0-9-]*$/.test(selector)) return true;
-
-  // Selector de clase simple (.class)
-  if (selector.charAt(0) === '.' && selector.indexOf(' ') === -1) return true;
-
-  // Selector de ID (#id)
-  if (selector.charAt(0) === '#') return true;
-
-  // Selectores anidados (.parent .child, div .class, etc.)
-  if (selector.indexOf(' ') !== -1) return true;
-
-  // Pseudoelementos (::before, ::after)
-  if (selector.indexOf('::') !== -1) return true;
-
-  return false;
-}
-
-function extractCSS(htmlStr) {
-  var cssRules = {};
-  var cssVariables = {}; // FIXED: Store CSS variables
-  var allCssText = '';
-
-  // Soportar múltiples style tags
-  var searchStr = htmlStr;
-  var startTag = '<style';
-  var endTag = '</style>';
-
-  while (true) {
-    var styleStart = searchStr.indexOf(startTag);
-    if (styleStart === -1) break;
-
-    var contentStart = searchStr.indexOf('>', styleStart);
-    if (contentStart === -1) break;
-    contentStart += 1;
-
-    var styleEnd = searchStr.indexOf(endTag, contentStart);
-    if (styleEnd === -1) break;
-
-    allCssText += searchStr.substring(contentStart, styleEnd) + ' ';
-    searchStr = searchStr.substring(styleEnd + endTag.length);
-  }
-
-  if (!allCssText) return cssRules;
-
-  // Remove CSS comments (simple approach sin regex problemático)
-  var cleanCss = '';
-  var inComment = false;
-  for (var ci = 0; ci < allCssText.length; ci++) {
-    if (!inComment && allCssText[ci] === '/' && allCssText[ci+1] === '*') {
-      inComment = true;
-      ci++;
-    } else if (inComment && allCssText[ci] === '*' && allCssText[ci+1] === '/') {
-      inComment = false;
-      ci++;
-    } else if (!inComment) {
-      cleanCss += allCssText[ci];
-    }
-  }
-  allCssText = cleanCss;
-
-  // FIXED: Extract CSS variables from :root
-  var rootMatch = allCssText.match(/:root\s*\{([^}]+)\}/);
-  if (rootMatch) {
-    var rootDeclarations = rootMatch[1];
-    var varPairs = rootDeclarations.split(';');
-    for (var vi = 0; vi < varPairs.length; vi++) {
-      var pair = varPairs[vi].trim();
-      if (pair.indexOf('--') === 0) {
-        var colonIdx = pair.indexOf(':');
-        if (colonIdx > 0) {
-          var varName = pair.substring(0, colonIdx).trim();
-          var varValue = pair.substring(colonIdx + 1).trim();
-          cssVariables[varName] = varValue;
-        }
-      }
-    }
-  }
-
-  // FIXED: Function to resolve var() references
-  function resolveVariables(value) {
-    if (!value || typeof value !== 'string') return value;
-    return value.replace(/var\(([^)]+)\)/g, function(match, varRef) {
-      var parts = varRef.split(',');
-      var varName = parts[0].trim();
-      var fallback = parts[1] ? parts[1].trim() : null;
-      return cssVariables[varName] || fallback || match;
+    const promise = new Promise((resolve) => {
+      clone.onload = resolve;
+      clone.onerror = resolve; // Continue even on error
+      // Timeout after 3s
+      setTimeout(resolve, 3000);
     });
+
+    loadPromises.push(promise);
+    document.head.appendChild(clone);
+  });
+
+  // Wait for all external resources to load
+  if (loadPromises.length > 0) {
+    await Promise.all(loadPromises);
+    // Give a small buffer for Tailwind to process the DOM if it just loaded
+    await new Promise(r => setTimeout(r, 500));
   }
 
-  // FIXED: Remove @media, @keyframes, @supports blocks to prevent parsing issues
-  // These have nested braces that confuse the simple split by '}'
-  function removeAtRuleBlocks(css) {
-    var result = '';
-    var i = 0;
-    while (i < css.length) {
-      // Check for @ rules
-      if (css[i] === '@' && (css.substring(i, i + 6) === '@media' ||
-                             css.substring(i, i + 10) === '@keyframes' ||
-                             css.substring(i, i + 9) === '@supports' ||
-                             css.substring(i, i + 8) === '@charset' ||
-                             css.substring(i, i + 7) === '@import')) {
-        // Find the opening brace
-        var braceStart = css.indexOf('{', i);
-        if (braceStart === -1) {
-          // No brace, skip to end of line
-          var lineEnd = css.indexOf(';', i);
-          i = lineEnd !== -1 ? lineEnd + 1 : css.length;
-          continue;
-        }
-        // Count braces to find matching closing brace
-        var braceCount = 1;
-        var j = braceStart + 1;
-        while (j < css.length && braceCount > 0) {
-          if (css[j] === '{') braceCount++;
-          else if (css[j] === '}') braceCount--;
-          j++;
-        }
-        i = j; // Skip the entire @rule block
-      } else {
-        result += css[i];
-        i++;
-      }
-    }
-    return result;
+  // 2. Inject HTML content
+  container.innerHTML = htmlStr;
+
+  if (additionalCss) {
+    const styleTag = document.createElement('style');
+    styleTag.textContent = additionalCss;
+    container.appendChild(styleTag);
   }
 
-  allCssText = removeAtRuleBlocks(allCssText);
+  const results = [];
+  // Use a different strategy to find root elements, ignoring script/link tags we might have injected
+  const children = Array.from(container.children).filter(el =>
+    !['STYLE', 'SCRIPT', 'LINK', 'META'].includes(el.tagName)
+  );
 
-  var rules = allCssText.split('}');
-
-  for (var i = 0; i < rules.length; i++) {
-    var rule = rules[i].trim();
-    if (rule) {
-      var braceIdx = rule.indexOf('{');
-      if (braceIdx > 0) {
-        var selector = rule.substring(0, braceIdx).trim();
-        var declarations = rule.substring(braceIdx + 1).trim();
-
-        if (selector && declarations && !isUnsupportedSelector(selector)) {
-          // Procesar selectores múltiples (separados por coma)
-          var selectors = parseComplexSelector(selector);
-
-          for (var j = 0; j < selectors.length; j++) {
-            var singleSelector = selectors[j];
-
-            if (isValidCSSSelector(singleSelector)) {
-              // FIXED: Resolve CSS variables before parsing
-              var resolvedDeclarations = resolveVariables(declarations);
-              // Almacenar la regla CSS procesada
-              cssRules[singleSelector] = Object.assign({}, cssRules[singleSelector] || {}, parseInlineStyles(resolvedDeclarations));
-
-              // También manejar variaciones del selector
-              if (singleSelector.includes(' ')) {
-                // Para selectores anidados, también guardar versión normalizada
-                var normalizedSelector = singleSelector.replace(/\s+/g, ' ');
-                if (normalizedSelector !== singleSelector) {
-                  cssRules[normalizedSelector] = Object.assign({}, cssRules[normalizedSelector] || {}, parseInlineStyles(resolvedDeclarations));
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+  for (const child of children) {
+    const struct = await nodeToStruct(child);
+    if (struct) results.push(struct);
   }
 
-  return cssRules;
+  // Clean up
+  container.innerHTML = '';
+  return results;
 }
 
-// Detect root font-size from CSS (for rem unit conversion)
-// Returns the font-size in pixels, defaults to 16 if not found
-function detectRootFontSize(htmlStr) {
-  var cssRules = extractCSS(htmlStr);
-  var DEFAULT_REM_BASE = 16;
+async function nodeToStruct(node) {
+  if (node.nodeType === 1) { // Element node
+    const tag = node.tagName.toLowerCase();
+    const styles = getElementStyles(node);
 
-  // Check html selector first
-  if (cssRules['html'] && cssRules['html']['font-size']) {
-    var fontSize = cssRules['html']['font-size'];
-    // Handle percentage: 62.5% = 10px, 100% = 16px
-    if (fontSize.indexOf('%') !== -1) {
-      var percent = parseFloat(fontSize);
-      if (!isNaN(percent)) {
-        return (percent / 100) * DEFAULT_REM_BASE;
+    // Check for background image URL in styles
+    let bgImageUrl = null;
+    if (styles['background-image'] && styles['background-image'] !== 'none') {
+      const match = styles['background-image'].match(/url\(['"]?([^'"]+)['"]?\)/);
+      if (match) bgImageUrl = match[1];
+    }
+
+    const children = [];
+    const mixedContent = [];
+
+    for (const child of node.childNodes) {
+      if (child.nodeType === 3) { // Text node
+        const textContent = child.textContent.trim();
+        if (textContent) {
+          mixedContent.push({ type: 'text', text: textContent });
+        }
+      } else if (child.nodeType === 1) { // Element node
+        const childStruct = await nodeToStruct(child);
+        if (childStruct) {
+          children.push(childStruct);
+          mixedContent.push({ type: 'element', node: childStruct });
+        }
       }
     }
-    // Handle px value
-    if (fontSize.indexOf('px') !== -1) {
-      var px = parseFloat(fontSize);
-      if (!isNaN(px)) {
-        return px;
-      }
-    }
+
+    const struct = {
+      type: 'element',
+      tagName: tag,
+      text: node.innerText.trim(),
+      styles: styles,
+      attributes: {
+        value: node.value,
+        placeholder: node.getAttribute('placeholder'),
+        alt: node.getAttribute('alt'),
+        src: node.getAttribute('src'),
+        rows: node.getAttribute('rows')
+      },
+      children: children,
+      mixedContent: mixedContent.length > 0 ? mixedContent : null,
+      bgImageUrl: bgImageUrl
+    };
+
+    return struct;
   }
-
-  // Check :root selector
-  if (cssRules[':root'] && cssRules[':root']['font-size']) {
-    var fontSize = cssRules[':root']['font-size'];
-    if (fontSize.indexOf('%') !== -1) {
-      var percent = parseFloat(fontSize);
-      if (!isNaN(percent)) {
-        return (percent / 100) * DEFAULT_REM_BASE;
-      }
-    }
-    if (fontSize.indexOf('px') !== -1) {
-      var px = parseFloat(fontSize);
-      if (!isNaN(px)) {
-        return px;
-      }
-    }
-  }
-
-  return DEFAULT_REM_BASE;
-}
-
-// Viewport presets for design width detection (UI context)
-var VIEWPORT_PRESETS_UI = {
-  'mobile': 375,
-  'tablet': 768,
-  'desktop': 1440,
-  'large': 1600,
-  'wide': 1920
-};
-
-// Detect design width from HTML meta tags ONLY (UI context version)
-// El análisis completo de CSS y estructura se hace en code.ts con calculateContainerWidth()
-function detectDesignWidthFromHTML(htmlStr) {
-  // 1. Check for meta tag: <meta name="figma-width" content="375"> (flexible order)
-  var widthMatch1 = htmlStr.match(/<meta[^>]+name=["']figma-width["'][^>]+content=["'](\d+)["'][^>]*>/i);
-  var widthMatch2 = htmlStr.match(/<meta[^>]+content=["'](\d+)["'][^>]+name=["']figma-width["'][^>]*>/i);
-  var widthMetaMatch = widthMatch1 || widthMatch2;
-  if (widthMetaMatch) {
-    var width = parseInt(widthMetaMatch[1], 10);
-    if (!isNaN(width) && width > 0) {
-      return width;
-    }
-  }
-
-  // 2. Check for viewport preset: <meta name="figma-viewport" content="mobile"> (flexible order)
-  var vpMatch1 = htmlStr.match(/<meta[^>]+name=["']figma-viewport["'][^>]+content=["'](\w+)["'][^>]*>/i);
-  var vpMatch2 = htmlStr.match(/<meta[^>]+content=["'](\w+)["'][^>]+name=["']figma-viewport["'][^>]*>/i);
-  var viewportMetaMatch = vpMatch1 || vpMatch2;
-  if (viewportMetaMatch) {
-    var preset = viewportMetaMatch[1].toLowerCase();
-    if (VIEWPORT_PRESETS_UI[preset]) {
-      return VIEWPORT_PRESETS_UI[preset];
-    }
-  }
-
-  // 3. Check for HTML comment: <!-- figma-width: 1920 -->
-  var commentMatch = htmlStr.match(/<!--\s*figma-width:\s*(\d+)\s*-->/i);
-  if (commentMatch) {
-    var width = parseInt(commentMatch[1], 10);
-    if (!isNaN(width) && width > 0) {
-      return width;
-    }
-  }
-
-  // 4. UI solo detecta meta tags - el análisis de CSS/estructura se hace en code.ts
-  // Esto evita falsos positivos de elementos como .chapter-image-vertical: 160px
-
-  // Solo retornamos null aquí - code.ts usará calculateContainerWidth()
-  // para el análisis completo de estructura y CSS
   return null;
 }
 
-// HTML parsing function - COMPLETE VERSION with CSS specificity support
-function simpleParseHTML(htmlStr, additionalCss) {
-  var parser = new DOMParser();
-  var doc = parser.parseFromString(htmlStr, 'text/html');
-  var body = doc.body || doc.documentElement;
-
-  var cssRules = extractCSS(htmlStr);
-
-  // FIXED: Merge additional CSS if provided
-  if (additionalCss) {
-    var extraRules = extractCSS('<style>' + additionalCss + '</style>');
-    for (var selector in extraRules) {
-      if (extraRules.hasOwnProperty(selector)) {
-        cssRules[selector] = Object.assign({}, cssRules[selector] || {}, extraRules[selector]);
-      }
-    }
-  }
-
-  // Función para extraer content de pseudoelementos
-  function extractPseudoContent(element, cssRules) {
-    var className = element.getAttribute('class');
-    var tagName = element.tagName.toLowerCase();
-    var beforeContent = '';
-    var afterContent = '';
-
-    if (className) {
-      var classes = className.split(' ').filter(function(c) { return c.trim(); });
-
-      // Buscar ::before content
-      for (var i = 0; i < classes.length; i++) {
-        var beforeSelector = '.' + classes[i] + '::before';
-        if (cssRules[beforeSelector] && cssRules[beforeSelector].content) {
-          var contentValue = cssRules[beforeSelector].content;
-          if (SUPPORTED_CONTENT.hasOwnProperty(contentValue)) {
-            beforeContent = SUPPORTED_CONTENT[contentValue];
-            break;
-          }
-        }
-      }
-
-      // Buscar ::after content
-      for (var i = 0; i < classes.length; i++) {
-        var afterSelector = '.' + classes[i] + '::after';
-        if (cssRules[afterSelector] && cssRules[afterSelector].content) {
-          var contentValue = cssRules[afterSelector].content;
-          if (SUPPORTED_CONTENT.hasOwnProperty(contentValue)) {
-            afterContent = SUPPORTED_CONTENT[contentValue];
-            break;
-          }
-        }
-      }
-    }
-
-    // También buscar por elemento
-    var beforeElementSelector = tagName + '::before';
-    var afterElementSelector = tagName + '::after';
-
-    if (cssRules[beforeElementSelector] && cssRules[beforeElementSelector].content && !beforeContent) {
-      var contentValue = cssRules[beforeElementSelector].content;
-      if (SUPPORTED_CONTENT.hasOwnProperty(contentValue)) {
-        beforeContent = SUPPORTED_CONTENT[contentValue];
-      }
-    }
-
-    if (cssRules[afterElementSelector] && cssRules[afterElementSelector].content && !afterContent) {
-      var contentValue = cssRules[afterElementSelector].content;
-      if (SUPPORTED_CONTENT.hasOwnProperty(contentValue)) {
-        afterContent = SUPPORTED_CONTENT[contentValue];
-      }
-    }
-
-    return { before: beforeContent, after: afterContent };
-  }
-
-  // Función mejorada para obtener todos los selectores que aplican a un elemento
-  function getAllMatchingSelectors(element) {
-    var matchingSelectors = [];
-    var className = element.getAttribute('class');
-    var tagName = element.tagName.toLowerCase();
-    var elementId = element.getAttribute('id');
-
-    // Construir jerarquía de ancestors
-    var ancestors = [];
-    var currentElement = element.parentElement;
-    while (currentElement && currentElement.tagName !== 'BODY' && currentElement.tagName !== 'HTML') {
-      var ancestorClasses = currentElement.getAttribute('class');
-      var ancestorTag = currentElement.tagName.toLowerCase();
-      var ancestorId = currentElement.getAttribute('id');
-
-      ancestors.push({
-        classes: ancestorClasses ? ancestorClasses.split(' ').filter(function(c) { return c.trim(); }) : [],
-        tag: ancestorTag,
-        id: ancestorId
-      });
-      currentElement = currentElement.parentElement;
-    }
-
-    // Verificar todos los selectores CSS disponibles
-    for (var selector in cssRules) {
-      if (cssRules.hasOwnProperty(selector)) {
-        // Skip pseudo-element selectors for main style matching
-        if (selector.includes('::before') || selector.includes('::after')) {
-          continue;
-        }
-        if (selectorMatches(selector, element, className, tagName, elementId, ancestors)) {
-          matchingSelectors.push({
-            selector: selector,
-            specificity: calculateSpecificity(selector),
-            styles: cssRules[selector]
-          });
-        }
-      }
-    }
-
-    // Ordenar por especificidad (menor a mayor)
-    matchingSelectors.sort(function(a, b) {
-      return a.specificity - b.specificity;
-    });
-
-    return matchingSelectors;
-  }
-
-  // Función para verificar si un selector CSS coincide con un elemento
-  function selectorMatches(selector, element, className, tagName, elementId, ancestors) {
-    // FIXED: Universal selector (*) matches all elements
-    if (selector === '*') {
-      return true;
-    }
-
-    // Selector de elemento simple
-    if (selector === tagName) {
-      return true;
-    }
-
-    // Selector de clase simple
-    if (selector.charAt(0) === '.' && !selector.includes(' ') && className) {
-      var selectorClass = selector.substring(1);
-      // Handle combined classes like .class1.class2
-      if (selectorClass.includes('.')) {
-        return matchesCombinedClasses(selector, className);
-      }
-      var classes = className.split(' ').filter(function(c) { return c.trim(); });
-      return classes.indexOf(selectorClass) !== -1;
-    }
-
-    // Selector de ID
-    if (selector.charAt(0) === '#' && elementId) {
-      return selector.substring(1) === elementId;
-    }
-
-    // Selectores anidados (descendant, child >, sibling +, ~)
-    if (selector.includes(' ') || selector.includes('>') || selector.includes('+') || selector.includes('~')) {
-      return matchesNestedSelector(selector, element, className, tagName, elementId, ancestors);
-    }
-
-    // Selectores múltiples con clases combinadas (.class1.class2)
-    if (selector.includes('.') && !selector.includes(' ') && selector.indexOf('.') !== selector.lastIndexOf('.')) {
-      return matchesCombinedClasses(selector, className);
-    }
-
-    return false;
-  }
-
-  // Función para manejar selectores anidados (descendant, child >, sibling +~)
-  function matchesNestedSelector(selector, element, className, tagName, elementId, ancestors) {
-    // Parse selector into tokens with combinators
-    // Combinators: ' ' (descendant), '>' (child), '+' (adjacent sibling), '~' (general sibling)
-    var tokens = parseSelector(selector);
-
-    if (tokens.length === 0) return false;
-
-    // Last token must match current element
-    var lastToken = tokens[tokens.length - 1];
-    if (!selectorMatches(lastToken.selector, element, className, tagName, elementId, [])) {
-      return false;
-    }
-
-    // Process remaining tokens from right to left
-    var ancestorIndex = 0;
-    for (var i = tokens.length - 2; i >= 0; i--) {
-      var token = tokens[i];
-      var combinator = tokens[i + 1].combinator; // Combinator that connects to next token
-      var found = false;
-
-      if (combinator === '>') {
-        // Child combinator: must match immediate parent
-        if (ancestorIndex < ancestors.length) {
-          var parent = ancestors[ancestorIndex];
-          var parentClassNames = parent.classes.join(' ');
-          if (selectorMatches(token.selector, null, parentClassNames, parent.tag, parent.id, [])) {
-            found = true;
-            ancestorIndex++;
-          }
-        }
-      } else if (combinator === '+' || combinator === '~') {
-        // Sibling selectors: not fully supported in this context (need sibling info)
-        // For now, treat as descendant (partial support)
-        while (ancestorIndex < ancestors.length) {
-          var ancestor = ancestors[ancestorIndex];
-          var ancestorClassNames = ancestor.classes.join(' ');
-          if (selectorMatches(token.selector, null, ancestorClassNames, ancestor.tag, ancestor.id, [])) {
-            found = true;
-            ancestorIndex++;
-            break;
-          }
-          ancestorIndex++;
-        }
-      } else {
-        // Descendant combinator (space): can skip ancestors
-        while (ancestorIndex < ancestors.length) {
-          var ancestor = ancestors[ancestorIndex];
-          var ancestorClassNames = ancestor.classes.join(' ');
-          if (selectorMatches(token.selector, null, ancestorClassNames, ancestor.tag, ancestor.id, [])) {
-            found = true;
-            ancestorIndex++;
-            break;
-          }
-          ancestorIndex++;
-        }
-      }
-
-      if (!found) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  // Parse selector into tokens with combinators
-  function parseSelector(selector) {
-    var tokens = [];
-    var current = '';
-    var lastCombinator = ' ';
-
-    for (var i = 0; i < selector.length; i++) {
-      var char = selector[i];
-
-      if (char === '>' || char === '+' || char === '~') {
-        if (current.trim()) {
-          tokens.push({ selector: current.trim(), combinator: lastCombinator });
-        }
-        lastCombinator = char;
-        current = '';
-      } else if (char === ' ') {
-        // Check if this is a space combinator or just whitespace around other combinators
-        if (current.trim() && i + 1 < selector.length) {
-          var nextNonSpace = selector.substring(i + 1).trimStart()[0];
-          if (nextNonSpace !== '>' && nextNonSpace !== '+' && nextNonSpace !== '~') {
-            tokens.push({ selector: current.trim(), combinator: lastCombinator });
-            lastCombinator = ' ';
-            current = '';
-          }
-        }
-      } else {
-        current += char;
-      }
-    }
-
-    if (current.trim()) {
-      tokens.push({ selector: current.trim(), combinator: lastCombinator });
-    }
-
-    return tokens;
-  }
-
-  // Función para manejar clases combinadas (.class1.class2)
-  function matchesCombinedClasses(selector, className) {
-    if (!className) return false;
-
-    var requiredClasses = selector.split('.').filter(function(c) { return c.trim(); });
-    var elementClasses = className.split(' ').filter(function(c) { return c.trim(); });
-
-    return requiredClasses.every(function(reqClass) {
-      return elementClasses.indexOf(reqClass) !== -1;
-    });
-  }
-
-  // Calcular especificidad CSS básica
-  function calculateSpecificity(selector) {
-    var specificity = 0;
-
-    // IDs = 100 (contar #)
-    for (var si = 0; si < selector.length; si++) {
-      if (selector[si] === '#') specificity += 100;
-    }
-
-    // Classes = 10 (contar .)
-    for (var si = 0; si < selector.length; si++) {
-      if (selector[si] === '.') specificity += 10;
-    }
-
-    // Elements = 1 (buscar palabras alfabéticas que no sigan a . o #)
-    var inWord = false;
-    var wordStart = 0;
-    for (var si = 0; si <= selector.length; si++) {
-      var ch = selector[si];
-      var isAlpha = ch && ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch === '-');
-      if (isAlpha && !inWord) {
-        inWord = true;
-        wordStart = si;
-      } else if (!isAlpha && inWord) {
-        inWord = false;
-        // Verificar si la palabra anterior no empieza con . o #
-        var prevChar = wordStart > 0 ? selector[wordStart - 1] : '';
-        if (prevChar !== '.' && prevChar !== '#') {
-          specificity += 1;
-        }
-      }
-    }
-
-    return specificity;
-  }
-
-  function getElementStyles(element) {
-    var styles = {};
-    var cssImportantStyles = {}; // CSS rules with !important
-
-    // Obtener todos los selectores que coinciden y aplicar en orden de especificidad
-    var matchingSelectors = getAllMatchingSelectors(element);
-
-    for (var i = 0; i < matchingSelectors.length; i++) {
-      var selectorStyles = matchingSelectors[i].styles;
-      // Separate !important CSS properties
-      for (var prop in selectorStyles) {
-        if (selectorStyles.hasOwnProperty(prop)) {
-          var val = selectorStyles[prop];
-          if (typeof val === 'string' && val.indexOf('!important') !== -1) {
-            cssImportantStyles[prop] = val.replace(/\s*!important\s*/gi, '').trim();
-          } else {
-            styles[prop] = val;
-          }
-        }
-      }
-    }
-
-    // Apply inline styles (with !important tracking)
-    var inlineStyle = element.getAttribute('style');
-    var inlineNormal = {};
-    var inlineImportant = {};
-
-    if (inlineStyle) {
-      var parsed = parseInlineStyles(inlineStyle, true);
-      inlineNormal = parsed.styles;
-      inlineImportant = parsed.important;
-    }
-
-    // CSS cascade order:
-    // 1. Normal CSS (already in styles)
-    // 2. Normal inline styles (override CSS)
-    styles = Object.assign(styles, inlineNormal);
-    // 3. CSS !important (override inline normal)
-    styles = Object.assign(styles, cssImportantStyles);
-    // 4. Inline !important (override everything)
-    styles = Object.assign(styles, inlineImportant);
-
-    return styles;
-  }
-
-  function nodeToStruct(node) {
-    if (node.nodeType === 1) {
-      var tag = node.tagName.toLowerCase();
-      var styles = getElementStyles(node);
-      var text = '';
-      var children = [];
-      var mixedContent = []; // NEW: Track order of text and elements
-
-      // Extraer contenido de pseudoelementos
-      var pseudoContent = extractPseudoContent(node, cssRules);
-
-      // Add ::before content as first mixed content item
-      if (pseudoContent.before) {
-        mixedContent.push({ type: 'text', text: pseudoContent.before });
-      }
-
-      for (var i = 0; i < node.childNodes.length; i++) {
-        var child = node.childNodes[i];
-        if (child.nodeType === 3) {
-          var textContent = child.textContent.trim();
-          if (textContent) {
-            text += textContent;
-            // NEW: Add text to mixedContent array in order
-            mixedContent.push({ type: 'text', text: textContent });
-          }
-        } else if (child.nodeType === 1) {
-          var childStruct = nodeToStruct(child);
-          if (childStruct) {
-            children.push(childStruct);
-            // NEW: Add element to mixedContent array in order
-            mixedContent.push({ type: 'element', node: childStruct });
-          }
-        }
-      }
-
-      // Add ::after content as last mixed content item
-      if (pseudoContent.after) {
-        mixedContent.push({ type: 'text', text: pseudoContent.after });
-      }
-
-      // Legacy text property (for backward compatibility)
-      if (pseudoContent.before) {
-        text = pseudoContent.before + (text ? ' ' + text : '');
-      }
-      if (pseudoContent.after) {
-        text = (text || '') + (text ? ' ' : '') + pseudoContent.after;
-      }
-
-      // Determine if this element has mixed content (text interleaved with elements)
-      var hasMixedContent = false;
-      var hasText = false;
-      var hasElements = false;
-      for (var j = 0; j < mixedContent.length; j++) {
-        if (mixedContent[j].type === 'text') hasText = true;
-        if (mixedContent[j].type === 'element') hasElements = true;
-      }
-      hasMixedContent = hasText && hasElements;
-
-      return {
-        type: 'element',
-        tagName: tag,
-        text: text.trim(),
-        styles: styles,
-        attributes: {
-          value: node.getAttribute('value'),
-          placeholder: node.getAttribute('placeholder'),
-          alt: node.getAttribute('alt'),
-          rows: node.getAttribute('rows'),
-          src: node.getAttribute('src')
-        },
-        children: children,
-        mixedContent: hasMixedContent ? mixedContent : null, // Only include if truly mixed
-        pseudoContent: pseudoContent // Guardar para referencia
-      };
-    }
-    return null;
-  }
-
-  // Include body element with its styles (background, font-family, etc.)
-  var bodyStruct = nodeToStruct(body);
-  if (bodyStruct) {
-    return [bodyStruct];
-  }
-
-  // Fallback: if body parsing fails, return children directly
-  var result = [];
-  for (var i = 0; i < body.childNodes.length; i++) {
-    var child = nodeToStruct(body.childNodes[i]);
-    if (child) result.push(child);
-  }
-
-  return result;
-}
-
-// ===============================================
-// SSE CONNECTION MANAGEMENT
-// ===============================================
-
+// SSE Connection Management
 var eventSource = null;
 
 function startSSEConnection() {
   if (eventSource) stopSSEConnection();
-
-  if (!currentSessionId) {
-    debugLog('[SSE] Cannot connect: No session ID available');
-    updateSSEStatus('No Session ID', 'warning');
-    return;
-  }
+  if (!currentSessionId) return;
 
   detectServer(function() {
     var sseUrl = MCP_SERVER_URL + '/mcp-stream?sessionId=' + currentSessionId;
-    debugLog('[SSE] Connecting to:', sseUrl);
-
     try {
       eventSource = new EventSource(sseUrl);
-
       eventSource.onopen = function() {
-        debugLog('[SSE] Connection established');
         updateSSEStatus('SSE Connected', 'connected');
         parent.postMessage({ pluginMessage: { type: 'sse-connected' } }, '*');
-        updateConnectionDetails('AI Bridge: Connected and active');
       };
-
       eventSource.onmessage = function(e) {
-        debugLog('[SSE] Message received:', e.data);
         try {
           var data = JSON.parse(e.data);
-
-          if (data.type === 'heartbeat') return;
-
           if (data.type === 'mcp-request' && data.function === 'figma_html_bridge_import') {
-            updateConnectionDetails('AI Bridge: Importing HTML content...');
             parent.postMessage({ pluginMessage: {
               type: 'parse-mcp-html',
               html: data.arguments.html,
               name: data.arguments.name || 'AI Import',
-              requestId: data.requestId,
-              timestamp: data.timestamp
+              requestId: data.requestId
             } }, '*');
           }
-        } catch(err) {
-          console.error('[SSE] Error parsing message:', err);
-        }
+        } catch(err) {}
       };
-
-      eventSource.onerror = function(e) {
-        console.error('[SSE] Connection error:', e);
-        updateSSEStatus('Connection Error', 'error');
-        updateConnectionDetails('AI Bridge: Connection failed. Check server.');
-        stopSSEConnection();
-      };
-    } catch (err) {
-      console.error('[SSE] Failed to create EventSource:', err);
-      updateSSEStatus('Setup Error', 'error');
-    }
+      eventSource.onerror = function() { stopSSEConnection(); };
+    } catch (err) {}
   });
 }
 
@@ -1482,21 +669,88 @@ function stopSSEConnection() {
   if (eventSource) {
     eventSource.close();
     eventSource = null;
-    debugLog('[SSE] Connection closed');
     updateSSEStatus('SSE Disconnected', 'disconnected');
     parent.postMessage({ pluginMessage: { type: 'sse-disconnected' } }, '*');
-    updateConnectionDetails('AI Bridge: Disconnected');
   }
 }
 
-// ===============================================
-// UI LOGIC - UPDATED FOR MODERN INTERFACE
-// ===============================================
+// UI Setup
+function updateHistoryUI() {
+  const history = JSON.parse(localStorage.getItem('figma_import_history') || '[]');
+  const list = document.getElementById('recent-list');
+  if (!list) return;
+
+  if (history.length === 0) {
+    list.innerHTML = '<div style="font-size: 12px; color: var(--text-secondary); font-style: italic; padding: 12px; text-align: center;">No history found</div>';
+    return;
+  }
+
+  list.innerHTML = history.map((item, index) => `
+    <div class="history-item" onclick="loadHistoryItem(${index})">
+      <div style="display: flex; flex-direction: column;">
+        <span style="font-size: 12px; font-weight: 600;">${item.name}</span>
+        <span style="font-size: 10px; color: var(--text-secondary);">${new Date(item.date).toLocaleString()}</span>
+      </div>
+      <div style="font-size: 10px; color: var(--primary); font-weight: 700;">${item.sourceType.toUpperCase()}</div>
+    </div>
+  `).join('');
+}
+
+window.loadHistoryItem = function(index) {
+  const history = JSON.parse(localStorage.getItem('figma_import_history') || '[]');
+  const item = history[index];
+  if (!item) return;
+
+  if (item.sourceType === 'paste') {
+    document.getElementById('html-input').value = item.html || '';
+    document.getElementById('css-input').value = item.css || '';
+    document.querySelector('.tab[data-tab="paste"]').click();
+  } else if (item.sourceType === 'url') {
+    document.getElementById('url-input').value = item.url || '';
+    document.querySelector('.tab[data-tab="upload"]').click();
+    window.lastUploadedContent = item.html;
+    window.lastUploadedUrl = item.url;
+    document.getElementById('upload-convert-btn').disabled = false;
+  }
+};
+
+function saveToHistory(name, type, data) {
+  const history = JSON.parse(localStorage.getItem('figma_import_history') || '[]');
+  const newItem = {
+    name: name,
+    sourceType: type,
+    date: new Date().toISOString(),
+    ...data
+  };
+
+  // Prevent duplicates
+  const filtered = history.filter(h => h.name !== name || h.sourceType !== type);
+  filtered.unshift(newItem);
+
+  localStorage.setItem('figma_import_history', JSON.stringify(filtered.slice(0, 10)));
+  updateHistoryUI();
+}
 
 document.addEventListener('DOMContentLoaded', function() {
   detectServer();
+  updateHistoryUI();
 
-  // Tab switching
+  // Minimize functionality
+  document.getElementById('minimize-btn').onclick = function() {
+    document.body.classList.add('minimized');
+    parent.postMessage({ pluginMessage: { type: 'resize-plugin', minimized: true } }, '*');
+  };
+
+  document.getElementById('minimized-expand-btn').onclick = function() {
+    document.body.classList.remove('minimized');
+    parent.postMessage({ pluginMessage: { type: 'resize-plugin', minimized: false } }, '*');
+  };
+
+  document.getElementById('clear-history-btn').onclick = function() {
+    localStorage.removeItem('figma_import_history');
+    updateHistoryUI();
+  };
+
   document.querySelectorAll('.tab').forEach(function(tab) {
     tab.onclick = function() {
       document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
@@ -1506,375 +760,131 @@ document.addEventListener('DOMContentLoaded', function() {
     };
   });
 
-  // Config panel toggle
   document.getElementById('mcp-config-btn').onclick = function() {
     var p = document.getElementById('mcp-config-panel');
-    if (p.style.display === 'none') {
-      p.style.display = 'block'; this.textContent = 'Hide Config'; updateConfigDisplay();
-    } else {
-      p.style.display = 'none'; this.textContent = 'Config';
-    }
+    p.style.display = p.style.display === 'none' ? 'block' : 'none';
   };
 
-  // Config tab switching
-  document.querySelectorAll('.config-tab').forEach(function(tab) {
-    tab.onclick = function() {
-      document.querySelectorAll('.config-tab').forEach(function(t) { t.classList.remove('active'); });
-      document.querySelectorAll('.config-content').forEach(function(c) { c.classList.remove('active'); });
-      tab.classList.add('active');
-      document.getElementById(tab.dataset.target).classList.add('active');
-    };
-  });
-
-  // Copy buttons
-  document.getElementById('copy-claude-cmd').onclick = function() {
-    if (copyToClipboard(generateClaudeCodeConfig())) {
-      var b = this; b.textContent = 'Copied!'; b.classList.add('copied');
-      setTimeout(function() { b.textContent = 'Copy'; b.classList.remove('copied'); }, 2000);
-    }
-  };
-  document.getElementById('copy-cursor-config').onclick = function() {
-    if (copyToClipboard(generateCursorConfig())) {
-      var b = this; b.textContent = 'Copied!'; b.classList.add('copied');
-      setTimeout(function() { b.textContent = 'Copy'; b.classList.remove('copied'); }, 2000);
-    }
-  };
-
-  // Convert Paste button
   document.getElementById('send-btn').onclick = async function() {
     var htmlVal = document.getElementById('html-input').value;
     var cssVal = document.getElementById('css-input').value;
-
-    if (!htmlVal.trim()) { alert('Please paste HTML.'); return; }
+    if (!htmlVal.trim()) return;
 
     var btn = document.getElementById('send-btn');
-    var oldHtml = btn.innerHTML;
     btn.disabled = true;
     btn.textContent = 'Converting...';
 
     try {
-      // Pass both HTML and the optional CSS
-      var structure = simpleParseHTML(htmlVal, cssVal);
+      const structure = await simpleParseHTML(htmlVal, cssVal);
       await collectAndFetchImages(structure, null);
-      var detectedWidth = detectDesignWidthFromHTML(htmlVal);
-      var detectedRemBase = detectRootFontSize(htmlVal);
-
       parent.postMessage({ pluginMessage: {
         type: 'html-structure', structure: structure,
-        detectedWidth: detectedWidth,
-        detectedRemBase: detectedRemBase,
         sourceType: 'paste', name: 'Pasted HTML'
       } }, '*');
-    } catch(e) {
-      console.error(e);
-      alert('Error: ' + e.message);
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = oldHtml;
-    }
+      saveToHistory('Pasted HTML', 'paste', { html: htmlVal, css: cssVal });
+    } catch(e) { alert('Error: ' + e.message); }
+    finally { btn.disabled = false; btn.textContent = 'Convert Selection'; }
   };
 
-  // URL Import button
-  var uploadedContent = null;
-  var lastFetchedUrl = null;
   document.getElementById('url-import-btn').onclick = function() {
     var url = document.getElementById('url-input').value;
     if (!url) return;
     if (!url.startsWith('http')) url = 'https://' + url;
 
-    if (!MCP_SERVER_URL) {
-      alert('Server not detected yet. Please wait a moment and try again.');
-      detectServer();
-      return;
-    }
-
-    // Ensure no double slashes when joining
-    var baseUrl = MCP_SERVER_URL.replace(/\/+$/, '');
-    var proxyUrl = baseUrl + '/proxy?url=' + encodeURIComponent(url);
-
-    debugLog('[FETCH] Requesting URL via proxy:', url);
-    debugLog('[FETCH] Proxy URL:', proxyUrl);
-    updateConnectionDetails('Fetching via proxy...');
-
-    fetch(proxyUrl).then(function(r) {
-      debugLog('[FETCH] Proxy response status:', r.status);
-      if (!r.ok) {
-        return r.text().then(function(text) {
-          debugLog('[FETCH] Error response body:', text);
-          throw new Error('Proxy server error: ' + r.status + (text ? ' (' + text.substring(0, 100) + ')' : ''));
-        });
-      }
-      return r.text();
-    }).then(async function(text) {
-      uploadedContent = text;
-      lastFetchedUrl = url;
-
-      updateConnectionDetails('Processing stylesheets...');
-
-      // Attempt to fetch external stylesheets to ensure styles are converted
-      try {
-        var parser = new DOMParser();
-        var doc = parser.parseFromString(text, 'text/html');
-        var links = doc.querySelectorAll('link[rel="stylesheet"]');
-        var stylePromises = [];
-
-        for (var i = 0; i < links.length; i++) {
-          var href = links[i].getAttribute('href');
-          if (href) {
-            try {
-              var fullHref = new URL(href, url).href;
-              var pUrl = MCP_SERVER_URL + '/proxy?url=' + encodeURIComponent(fullHref);
-              stylePromises.push(fetch(pUrl).then(function(r) { return r.ok ? r.text() : ''; }).catch(function() { return ''; }));
-            } catch(e) {}
-          }
-        }
-
-        if (stylePromises.length > 0) {
-          var styles = await Promise.all(stylePromises);
-          var combinedStyles = styles.join('\n');
-          if (combinedStyles.trim()) {
-            uploadedContent += '\n<style>\n' + combinedStyles + '\n</style>';
-          }
-        }
-      } catch(e) {
-        console.warn('Failed to fetch external stylesheets:', e);
-      }
-
+    var proxyUrl = MCP_SERVER_URL + '/proxy?apiKey=' + encodeURIComponent(MCP_API_KEY) + '&url=' + encodeURIComponent(url);
+    fetch(proxyUrl).then(r => r.text()).then(async text => {
       document.getElementById('upload-convert-btn').disabled = false;
-      updateConnectionDetails('Ready to convert!');
-      alert('Page fetched successfully with styles! Click "Convert Import" below to convert it.');
-    }).catch(function(e) {
-      console.error('Fetch error:', e);
-      alert('Fetch failed: ' + e.message + '\n\nPlease ensure your server is running or paste the HTML code directly into the "Paste HTML" tab.');
-      updateConnectionDetails('Fetch failed');
-    });
+      window.lastUploadedContent = text;
+      window.lastUploadedUrl = url;
+      alert('Page fetched! Click Convert Import.');
+    }).catch(e => alert('Fetch failed: ' + e.message));
   };
 
-  // File input
-  document.getElementById('file-input').onchange = function(e) {
-    var file = e.target.files[0];
-    if (!file) return;
-    document.getElementById('file-name').textContent = file.name;
-    var reader = new FileReader();
-    reader.onload = function(ev) {
-      uploadedContent = ev.target.result;
-      document.getElementById('upload-convert-btn').disabled = false;
-    };
-    reader.readAsText(file);
-  };
-
-  // Convert Upload/URL button
   document.getElementById('upload-convert-btn').onclick = async function() {
-    if (!uploadedContent) return;
-
+    if (!window.lastUploadedContent) return;
     var btn = document.getElementById('upload-convert-btn');
-    var oldHtml = btn.innerHTML;
     btn.disabled = true;
     btn.textContent = 'Converting...';
-
     try {
-      var structure = simpleParseHTML(uploadedContent);
-      await collectAndFetchImages(structure, lastFetchedUrl);
-
-      var detectedWidth = detectDesignWidthFromHTML(uploadedContent);
-      var detectedRemBase = detectRootFontSize(uploadedContent);
-
+      const structure = await simpleParseHTML(window.lastUploadedContent);
+      await collectAndFetchImages(structure, window.lastUploadedUrl);
       parent.postMessage({ pluginMessage: {
-        type: 'html-structure',
-        structure: structure,
-        detectedWidth: detectedWidth,
-        detectedRemBase: detectedRemBase,
-        name: 'Imported Page',
-        sourceType: 'url'
+        type: 'html-structure', structure: structure,
+        name: 'Imported Page', sourceType: 'url'
       } }, '*');
-    } catch(e) {
-      console.error(e);
-      alert('Error: ' + e.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Convert Import';
-    }
+      saveToHistory('Imported Page', 'url', { html: window.lastUploadedContent, url: window.lastUploadedUrl });
+    } catch(e) { alert('Error: ' + e.message); }
+    finally { btn.disabled = false; btn.textContent = 'Convert Import'; }
   };
 
-  // Clear history
-  document.getElementById('clear-history-btn').onclick = function() {
-    parent.postMessage({ pluginMessage: { type: 'clear-history' } }, '*');
-  };
-
-  // MCP Control
   document.getElementById('mcp-switch').onchange = function() {
     if (this.checked) {
-      updateSSEStatus('Connecting...', 'connecting');
       parent.postMessage({ pluginMessage: { type: 'start-sse' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'start-mcp-monitoring' } }, '*');
     } else {
-      updateSSEStatus('Disconnected', 'disconnected');
       parent.postMessage({ pluginMessage: { type: 'stop-sse' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'stop-mcp-monitoring' } }, '*');
     }
   };
-
-  // Test Connection
-  document.getElementById('test-broadcast-btn').onclick = function() {
-    parent.postMessage({ pluginMessage: { type: 'test-broadcast' } }, '*');
-  };
-
-  // Minimize logic
-  var toggleMinimize = function() {
-    var isMin = !document.body.classList.contains('minimized');
-    document.body.classList.toggle('minimized', isMin);
-    parent.postMessage({ pluginMessage: { type: 'resize-plugin', minimized: isMin } }, '*');
-  };
-  document.getElementById('minimize-btn').onclick = toggleMinimize;
-  document.getElementById('minimized-expand-btn').onclick = toggleMinimize;
-
-  // Manual server override
-  document.getElementById('save-server-btn').onclick = function() {
-    var val = document.getElementById('manual-server-input').value.trim();
-    if (!val) return;
-    if (!val.startsWith('http')) val = 'https://' + val;
-    val = val.replace(/\/+$/, ''); // Remove trailing slash
-
-    MCP_SERVER_URL = val;
-    serverDetected = true;
-    document.getElementById('current-server-display').textContent = val;
-    updateConnectionDetails('Server set to: ' + val);
-    updateConfigDisplay();
-    alert('Server URL updated to: ' + val);
-  };
 });
 
-// Image fetching logic with CORS proxy fallback and relative URL resolution
 async function collectAndFetchImages(struct, baseUrl) {
-  var fetchedCount = 0;
-  var failedCount = 0;
-
   async function traverse(nodes) {
     if (!nodes) return;
     for (let n of nodes) {
+      // Regular images
       if (n.tagName === 'img' && n.attributes && n.attributes.src) {
         let src = n.attributes.src;
-
-        // Resolve relative URLs if baseUrl is provided
         if (baseUrl && !src.startsWith('http') && !src.startsWith('data:')) {
-          try {
-            src = new URL(src, baseUrl).href;
-            n.attributes.src = src; // Update the src to full URL
-          } catch(e) {
-            console.warn('Failed to resolve relative URL:', src, baseUrl);
-          }
+          src = new URL(src, baseUrl).href;
         }
-
-        if (src.startsWith('data:')) continue;
-
-        try {
-          updateConnectionDetails('Fetching image: ' + (src.length > 40 ? src.substring(0, 37) + '...' : src));
-
-          let r = null;
-          // Try direct fetch first
-          try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3000);
-            r = await fetch(src, { signal: controller.signal });
-            clearTimeout(timeoutId);
-          } catch(e) {
-            debugLog('[IMAGE] Direct fetch failed:', src, e.message);
-          }
-
-          // If direct fetch fails (CORS or timeout), use proxy
-          if (!r || !r.ok) {
-            debugLog('[IMAGE] Using proxy for:', src);
-            if (!MCP_SERVER_URL) {
-              debugLog('[IMAGE] Skip proxy: Server not detected');
-            } else {
-              var baseUrl = MCP_SERVER_URL.replace(/\/+$/, '');
-              const proxyUrl = baseUrl + '/proxy?url=' + encodeURIComponent(src);
-              try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 8000);
-                r = await fetch(proxyUrl, { signal: controller.signal });
-                clearTimeout(timeoutId);
-              } catch(e) {
-                debugLog('[IMAGE] Proxy fetch failed:', src, e.message);
-              }
-            }
-          }
-
-          if (r && r.ok) {
-            n.imageData = Array.from(new Uint8Array(await r.arrayBuffer()));
-            fetchedCount++;
-          } else {
-            failedCount++;
-          }
-        } catch(e) {
-          failedCount++;
-          console.warn('Failed to fetch image after all attempts:', src);
+        if (!src.startsWith('data:')) {
+          n.imageData = await fetchImage(src);
         }
+      }
+      // Background images
+      if (n.bgImageUrl) {
+        let src = n.bgImageUrl;
+        if (baseUrl && !src.startsWith('http') && !src.startsWith('data:')) {
+          src = new URL(src, baseUrl).href;
+        }
+        n.bgImageData = await fetchImage(src);
       }
       if (n.children) await traverse(n.children);
     }
   }
   await traverse(struct);
-  updateConnectionDetails('Images: ' + fetchedCount + ' fetched' + (failedCount > 0 ? ', ' + failedCount + ' failed' : ''));
 }
 
-// SSE Status Updates
+async function fetchImage(src) {
+  try {
+    let r = await fetch(src);
+    if (!r.ok && MCP_SERVER_URL) {
+      r = await fetch(MCP_SERVER_URL + '/proxy?apiKey=' + encodeURIComponent(MCP_API_KEY) + '&url=' + encodeURIComponent(src));
+    }
+    if (r.ok) return Array.from(new Uint8Array(await r.arrayBuffer()));
+  } catch(e) {}
+  return null;
+}
+
 function updateSSEStatus(t, s) {
   var ind = document.getElementById('sse-indicator'), txt = document.getElementById('sse-status-text');
   if (txt) txt.textContent = t;
   if (ind) ind.className = 'status-icon ' + s;
 }
-function updateMCPStatus(t, s) {
-  var ind = document.getElementById('mcp-indicator'), txt = document.getElementById('mcp-status-text');
-  if (txt) txt.textContent = t;
-  if (ind) ind.className = 'status-icon ' + s;
-}
-function updateConnectionDetails(t) {
-  var d = document.getElementById('connection-details');
-  if (d) d.textContent = t;
-  var imp = document.getElementById('import-status');
-  if (imp) {
-    imp.textContent = t;
-    imp.style.display = 'block';
-  }
-}
-
-function updateHistory(history) {
-  var list = document.getElementById('recent-list'); if (!list) return;
-  if (!history || history.length === 0) { list.innerHTML = '<div style="font-size: 12px; color: var(--text-secondary); font-style: italic; padding: 12px; text-align: center;">No history found</div>'; return; }
-  list.innerHTML = '';
-  history.forEach(function(item) {
-    var div = document.createElement('div'); div.className = 'history-item';
-    div.innerHTML = '<div><div style="font-weight: 600; font-size: 13px;">' + item.name + '</div><div style="font-size: 10px; color: var(--text-secondary); margin-top: 2px;">' + item.type.toUpperCase() + ' • ' + new Date(item.timestamp).toLocaleTimeString() + '</div></div>';
-    list.appendChild(div);
-  });
-}
 
 window.onmessage = async function(event) {
   var msg = event.data.pluginMessage;
   if (!msg) return;
-
-  if (msg.type === 'session-id') {
-    currentSessionId = msg.sessionId; updateConfigDisplay();
-    parent.postMessage({ pluginMessage: { type: 'load-history' } }, '*');
-  }
-  if (msg.type === 'history-updated') updateHistory(msg.history);
+  if (msg.type === 'session-id') { currentSessionId = msg.sessionId; }
   if (msg.type === 'parse-mcp-html') {
-    try {
-      var struct = simpleParseHTML(msg.html);
-      await collectAndFetchImages(struct, msg.baseUrl || null);
-      parent.postMessage({ pluginMessage: { type: 'html-structure', structure: struct, name: msg.name, fromMCP: true } }, '*');
-    } catch (e) {
-      console.error('Error parsing MCP HTML:', e);
-    }
+    const struct = await simpleParseHTML(msg.html);
+    await collectAndFetchImages(struct, null);
+    parent.postMessage({ pluginMessage: { type: 'html-structure', structure: struct, name: msg.name, fromMCP: true } }, '*');
   }
   if (msg.type === 'start-sse-connection') startSSEConnection();
   if (msg.type === 'stop-sse-connection') stopSSEConnection();
-  if (msg.type === 'sse-connected') updateSSEStatus('SSE Connected', 'connected');
-  if (msg.type === 'sse-disconnected') updateSSEStatus('SSE Disconnected', 'disconnected');
-  if (msg.type === 'mcp-status-update') updateMCPStatus(msg.message, msg.status || 'info');
 };
-
 </script>
 </body>
 </html>

@@ -59,23 +59,21 @@ export function hexToRgb(color: string): RGB | null {
     return COLOR_KEYWORDS[lowerColor];
   }
 
-  // Handle rgb() format
-  const rgbMatch = color.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/i);
-  if (rgbMatch) {
-    return {
-      r: parseInt(rgbMatch[1]) / 255,
-      g: parseInt(rgbMatch[2]) / 255,
-      b: parseInt(rgbMatch[3]) / 255
-    };
-  }
+  // Handle rgb() and rgba() format (both old comma-separated and new space-separated)
+  // Supports: rgb(255, 0, 0), rgb(255 0 0), rgba(255, 0, 0, 0.5), rgba(255 0 0 / 0.5)
+  const rgbaRegex = /rgba?\(\s*(\d+(?:\.\d+)?%?)(?:\s*,\s*|\s+)(\d+(?:\.\d+)?%?)(?:\s*,\s*|\s+)(\d+(?:\.\d+)?%?)(?:\s*(?:,\s*|\/\s*)([0-9.]+)?%?)?\s*\)/i;
+  const rgbaMatch = color.match(rgbaRegex);
 
-  // Handle rgba() format
-  const rgbaMatch = color.match(/rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)/i);
   if (rgbaMatch) {
+    const parseComponent = (val: string) => {
+      if (val.endsWith('%')) return (parseFloat(val) / 100) * 255;
+      return parseFloat(val);
+    };
+
     return {
-      r: parseInt(rgbaMatch[1]) / 255,
-      g: parseInt(rgbaMatch[2]) / 255,
-      b: parseInt(rgbaMatch[3]) / 255
+      r: parseComponent(rgbaMatch[1]) / 255,
+      g: parseComponent(rgbaMatch[2]) / 255,
+      b: parseComponent(rgbaMatch[3]) / 255
     };
   }
 
@@ -107,26 +105,35 @@ export function hexToRgb(color: string): RGB | null {
  * Returns alpha channel (defaults to 1, except for 'transparent')
  */
 export function hexToRgba(color: string): RGBA | null {
-  const rgb = hexToRgb(color);
-  if (!rgb) return null;
-
-  // Handle rgba() format with alpha
-  const rgbaMatch = color.match(/rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)/i);
-  if (rgbaMatch) {
-    return {
-      r: parseInt(rgbaMatch[1]) / 255,
-      g: parseInt(rgbaMatch[2]) / 255,
-      b: parseInt(rgbaMatch[3]) / 255,
-      a: parseFloat(rgbaMatch[4])
-    };
-  }
-
-  // For transparent, return alpha 0
-  if (color.toLowerCase().trim() === 'transparent') {
+  const lowerColor = color.toLowerCase().trim();
+  if (lowerColor === 'transparent') {
     return { r: 0, g: 0, b: 0, a: 0 };
   }
 
-  // Default alpha 1 for all other colors
+  // Handle rgb() and rgba() format (both old comma-separated and new space-separated)
+  const rgbaRegex = /rgba?\(\s*(\d+(?:\.\d+)?%?)(?:\s*,\s*|\s+)(\d+(?:\.\d+)?%?)(?:\s*,\s*|\s+)(\d+(?:\.\d+)?%?)(?:\s*(?:,\s*|\/\s*)([0-9.]+)?%?)?\s*\)/i;
+  const rgbaMatch = color.match(rgbaRegex);
+
+  if (rgbaMatch) {
+    const parseComponent = (val: string) => {
+      if (val.endsWith('%')) return (parseFloat(val) / 100) * 255;
+      return parseFloat(val);
+    };
+
+    const alpha = rgbaMatch[4] ? parseFloat(rgbaMatch[4]) : 1;
+
+    return {
+      r: parseComponent(rgbaMatch[1]) / 255,
+      g: parseComponent(rgbaMatch[2]) / 255,
+      b: parseComponent(rgbaMatch[3]) / 255,
+      a: alpha
+    };
+  }
+
+  const rgb = hexToRgb(color);
+  if (!rgb) return null;
+
+  // Default alpha 1 for all other colors (hex, keywords)
   return { ...rgb, a: 1 };
 }
 

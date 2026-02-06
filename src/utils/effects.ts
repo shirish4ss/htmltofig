@@ -48,38 +48,37 @@ export interface GradientResult {
  * Returns a Figma-compatible effect object (using any for compatibility with Figma API)
  */
 export function parseBoxShadow(shadowValue: string): any | null {
-  const match = shadowValue.match(/(-?\d+(?:\.\d+)?(?:px)?)\s+(-?\d+(?:\.\d+)?(?:px)?)\s+(-?\d+(?:\.\d+)?(?:px)?)?\s*(-?\d+(?:\.\d+)?(?:px)?)?\s*(rgba?\([^)]+\)|#[a-fA-F0-9]{6}|#[a-fA-F0-9]{3})?/);
+  if (!shadowValue || shadowValue === 'none') return null;
 
-  if (match) {
-    const offsetX = parseSize(match[1]) || 0;
-    const offsetY = parseSize(match[2]) || 0;
-    const blurRadius = parseSize(match[3]) || 0;
-    const colorStr = match[5];
+  // Check for inset shadow
+  const isInset = shadowValue.includes('inset');
+  const cleanShadow = shadowValue.replace('inset', '').trim();
 
-    let color = { r: 0, g: 0, b: 0, a: 0.25 }; // Default shadow color
+  // Robust color extraction - handles rgb, rgba, hex, and keywords
+  // getComputedStyle usually returns rgb/rgba at the beginning or end
+  const colorRegex = /(rgba?\([^)]+\)|#[a-fA-F0-9]{6}|#[a-fA-F0-9]{3})/;
+  const colorMatch = cleanShadow.match(colorRegex);
+  const colorStr = colorMatch ? colorMatch[1] : null;
 
-    if (colorStr) {
-      // If rgba, extract opacity
-      const rgbaMatch = colorStr.match(/rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)/);
-      if (rgbaMatch) {
-        color = {
-          r: parseInt(rgbaMatch[1]) / 255,
-          g: parseInt(rgbaMatch[2]) / 255,
-          b: parseInt(rgbaMatch[3]) / 255,
-          a: parseFloat(rgbaMatch[4])
-        };
-      } else {
-        const rgb = hexToRgb(colorStr);
-        if (rgb) {
-          color = { ...rgb, a: 0.25 }; // Default alpha for hex colors
-        }
-      }
-    }
+  // Remove color to parse numbers easily
+  const remaining = colorStr ? cleanShadow.replace(colorStr, '').trim() : cleanShadow;
+  const numbers = remaining.match(/(-?\d+(?:\.\d+)?(?:px)?)/g);
+
+  if (numbers && numbers.length >= 2) {
+    const offsetX = parseSize(numbers[0]) || 0;
+    const offsetY = parseSize(numbers[1]) || 0;
+    const blurRadius = numbers[2] ? (parseSize(numbers[2]) || 0) : 0;
+    const spread = numbers[3] ? (parseSize(numbers[3]) || 0) : 0;
+
+    // Use the improved hexToRgba for reliable color parsing
+    const parsedColor = colorStr ? hexToRgba(colorStr) : null;
+    const color = parsedColor || { r: 0, g: 0, b: 0, a: 0.25 };
 
     return {
-      type: 'DROP_SHADOW',
+      type: isInset ? 'INNER_SHADOW' : 'DROP_SHADOW',
       offset: { x: offsetX, y: offsetY },
       radius: blurRadius,
+      spread: spread,
       color: color,
       blendMode: 'NORMAL',
       visible: true

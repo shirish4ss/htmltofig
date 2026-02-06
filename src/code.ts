@@ -382,23 +382,25 @@ function applyStylesToFrame(frame: FrameNode, styles: any) {
         }
       }
     }
-  } else if ((styles['background-color'] && styles['background-color'] !== 'transparent') ||
-             (styles['background'] && !styles['background'].includes('gradient') && styles['background'] !== 'transparent')) {
+  } else if ((styles['background-color'] && styles['background-color'] !== 'transparent' && styles['background-color'] !== 'rgba(0, 0, 0, 0)') ||
+             (styles['background'] && !styles['background'].includes('gradient') && styles['background'] !== 'transparent' && styles['background'] !== 'rgba(0, 0, 0, 0)')) {
     // Handle both background-color and background (shorthand) properties
     const bgColorValue = styles['background-color'] || styles['background'];
 
     // Use hexToRgba to preserve alpha/opacity for semi-transparent backgrounds
     const bgColorWithAlpha = hexToRgba(bgColorValue);
 
-    if (bgColorWithAlpha) {
+    if (bgColorWithAlpha && bgColorWithAlpha.a > 0) {
       // Use RGBA format to preserve opacity
       frame.fills = [{
         type: 'SOLID',
         color: { r: bgColorWithAlpha.r, g: bgColorWithAlpha.g, b: bgColorWithAlpha.b },
         opacity: bgColorWithAlpha.a
       }];
+    } else {
+      frame.fills = [];
     }
-  } else if (!hasExplicitBackground) {
+  } else if (!hasExplicitBackground || styles['background-color'] === 'transparent' || styles['background-color'] === 'rgba(0, 0, 0, 0)') {
     // FIXED: Explicitly set empty fills for elements without background CSS
     frame.fills = [];
   }
@@ -529,10 +531,10 @@ function applyStylesToFrame(frame: FrameNode, styles: any) {
     if (filter.blur !== undefined && filter.blur > 0) {
       effects.push({
         type: 'LAYER_BLUR',
-        blurType: 'NORMAL',
         radius: filter.blur,
-        visible: true
-      });
+        visible: true,
+        blurType: 'NORMAL'
+      } as BlurEffect);
     }
 
     // Apply drop shadow from filter
@@ -561,10 +563,10 @@ function applyStylesToFrame(frame: FrameNode, styles: any) {
       const effects: Effect[] = [...(frame.effects || [])];
       effects.push({
         type: 'BACKGROUND_BLUR',
-        blurType: 'NORMAL',
         radius: backdropFilter.blur,
-        visible: true
-      });
+        visible: true,
+        blurType: 'NORMAL'
+      } as BlurEffect);
       frame.effects = effects;
     }
   }
@@ -1664,6 +1666,24 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
           applyStylesToFrame(frame, node.styles);
         }
 
+        // Apply background image if present
+        if (node.bgImageData) {
+          try {
+            const image = figma.createImage(new Uint8Array(node.bgImageData));
+            const currentFills = Array.isArray(frame.fills) ? [...frame.fills] : [];
+            frame.fills = [
+              ...currentFills,
+              {
+                type: 'IMAGE',
+                imageHash: image.hash,
+                scaleMode: 'FILL'
+              }
+            ];
+          } catch (error) {
+            console.error('Error applying background image:', error);
+          }
+        }
+
         // Debug only detail-label and detail-value containers
         if (node.styles?.className === 'detail-label' || node.styles?.className === 'detail-value') {
         }
@@ -2659,7 +2679,23 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
 
         const frame = figma.createFrame();
         frame.resize(width, height);
-        frame.fills = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }];
+
+        if (node.imageData) {
+          try {
+            const image = figma.createImage(new Uint8Array(node.imageData));
+            frame.fills = [{
+              type: 'IMAGE',
+              imageHash: image.hash,
+              scaleMode: 'FILL'
+            }];
+          } catch (error) {
+            console.error('Error creating image fill:', error);
+            frame.fills = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }];
+          }
+        } else {
+          frame.fills = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }];
+        }
+
         frame.name = 'Image: ' + (node.attributes?.alt || 'Unnamed');
 
         // Center the placeholder text
