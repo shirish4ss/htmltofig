@@ -1782,11 +1782,12 @@ async function collectAndFetchImages(struct, baseUrl) {
               const proxyUrl = baseUrl + '/proxy?url=' + encodeURIComponent(src);
               try {
                 const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 8000);
-              r = await fetch(proxyUrl, { signal: controller.signal });
-              clearTimeout(timeoutId);
-            } catch(e) {
-              debugLog('[IMAGE] Proxy fetch failed:', src, e.message);
+                const timeoutId = setTimeout(() => controller.abort(), 8000);
+                r = await fetch(proxyUrl, { signal: controller.signal });
+                clearTimeout(timeoutId);
+              } catch(e) {
+                debugLog('[IMAGE] Proxy fetch failed:', src, e.message);
+              }
             }
           }
 
