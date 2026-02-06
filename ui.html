@@ -313,8 +313,12 @@
       <!-- Paste Tab -->
       <div id="paste-tab" class="tab-content">
         <div class="form-group">
-          <label>HTML / CSS Source</label>
-          <textarea id="html-input" class="textarea" style="height: 240px;" placeholder="<div style='...'>...</div>"></textarea>
+          <label>HTML Source</label>
+          <textarea id="html-input" class="textarea" style="height: 180px;" placeholder="<div class='box'>...</div>"></textarea>
+        </div>
+        <div class="form-group">
+          <label>CSS Source (Optional)</label>
+          <textarea id="css-input" class="textarea" style="height: 100px;" placeholder=".box { background: red; }"></textarea>
         </div>
         <button id="send-btn" class="button">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
@@ -938,12 +942,22 @@ function detectDesignWidthFromHTML(htmlStr) {
 }
 
 // HTML parsing function - COMPLETE VERSION with CSS specificity support
-function simpleParseHTML(htmlStr) {
+function simpleParseHTML(htmlStr, additionalCss) {
   var parser = new DOMParser();
   var doc = parser.parseFromString(htmlStr, 'text/html');
   var body = doc.body || doc.documentElement;
 
   var cssRules = extractCSS(htmlStr);
+
+  // FIXED: Merge additional CSS if provided
+  if (additionalCss) {
+    var extraRules = extractCSS('<style>' + additionalCss + '</style>');
+    for (var selector in extraRules) {
+      if (extraRules.hasOwnProperty(selector)) {
+        cssRules[selector] = Object.assign({}, cssRules[selector] || {}, extraRules[selector]);
+      }
+    }
+  }
 
   // Función para extraer content de pseudoelementos
   function extractPseudoContent(element, cssRules) {
@@ -1381,6 +1395,81 @@ function simpleParseHTML(htmlStr) {
 }
 
 // ===============================================
+// SSE CONNECTION MANAGEMENT
+// ===============================================
+
+var eventSource = null;
+
+function startSSEConnection() {
+  if (eventSource) stopSSEConnection();
+
+  if (!currentSessionId) {
+    debugLog('[SSE] Cannot connect: No session ID available');
+    updateSSEStatus('No Session ID', 'warning');
+    return;
+  }
+
+  detectServer(function() {
+    var sseUrl = MCP_SERVER_URL + '/mcp-stream?sessionId=' + currentSessionId;
+    debugLog('[SSE] Connecting to:', sseUrl);
+
+    try {
+      eventSource = new EventSource(sseUrl);
+
+      eventSource.onopen = function() {
+        debugLog('[SSE] Connection established');
+        updateSSEStatus('SSE Connected', 'connected');
+        parent.postMessage({ pluginMessage: { type: 'sse-connected' } }, '*');
+        updateConnectionDetails('AI Bridge: Connected and active');
+      };
+
+      eventSource.onmessage = function(e) {
+        debugLog('[SSE] Message received:', e.data);
+        try {
+          var data = JSON.parse(e.data);
+
+          if (data.type === 'heartbeat') return;
+
+          if (data.type === 'mcp-request' && data.function === 'figma_html_bridge_import') {
+            updateConnectionDetails('AI Bridge: Importing HTML content...');
+            parent.postMessage({ pluginMessage: {
+              type: 'parse-mcp-html',
+              html: data.arguments.html,
+              name: data.arguments.name || 'AI Import',
+              requestId: data.requestId,
+              timestamp: data.timestamp
+            } }, '*');
+          }
+        } catch(err) {
+          console.error('[SSE] Error parsing message:', err);
+        }
+      };
+
+      eventSource.onerror = function(e) {
+        console.error('[SSE] Connection error:', e);
+        updateSSEStatus('Connection Error', 'error');
+        updateConnectionDetails('AI Bridge: Connection failed. Check server.');
+        stopSSEConnection();
+      };
+    } catch (err) {
+      console.error('[SSE] Failed to create EventSource:', err);
+      updateSSEStatus('Setup Error', 'error');
+    }
+  });
+}
+
+function stopSSEConnection() {
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+    debugLog('[SSE] Connection closed');
+    updateSSEStatus('SSE Disconnected', 'disconnected');
+    parent.postMessage({ pluginMessage: { type: 'sse-disconnected' } }, '*');
+    updateConnectionDetails('AI Bridge: Disconnected');
+  }
+}
+
+// ===============================================
 // UI LOGIC - UPDATED FOR MODERN INTERFACE
 // ===============================================
 
@@ -1433,8 +1522,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Convert Paste button
   document.getElementById('send-btn').onclick = async function() {
-    var val = document.getElementById('html-input').value;
-    if (!val.trim()) { alert('Please paste HTML.'); return; }
+    var htmlVal = document.getElementById('html-input').value;
+    var cssVal = document.getElementById('css-input').value;
+
+    if (!htmlVal.trim()) { alert('Please paste HTML.'); return; }
 
     var btn = document.getElementById('send-btn');
     var oldHtml = btn.innerHTML;
@@ -1442,10 +1533,11 @@ document.addEventListener('DOMContentLoaded', function() {
     btn.textContent = 'Converting...';
 
     try {
-      var structure = simpleParseHTML(val);
+      // Pass both HTML and the optional CSS
+      var structure = simpleParseHTML(htmlVal, cssVal);
       await collectAndFetchImages(structure, null);
-      var detectedWidth = detectDesignWidthFromHTML(val);
-      var detectedRemBase = detectRootFontSize(val);
+      var detectedWidth = detectDesignWidthFromHTML(htmlVal);
+      var detectedRemBase = detectRootFontSize(htmlVal);
 
       parent.postMessage({ pluginMessage: {
         type: 'html-structure', structure: structure,
@@ -1595,6 +1687,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Image fetching logic with CORS proxy fallback and relative URL resolution
 async function collectAndFetchImages(struct, baseUrl) {
+  var fetchedCount = 0;
+  var failedCount = 0;
+
   async function traverse(nodes) {
     if (!nodes) return;
     for (let n of nodes) {
@@ -1616,32 +1711,47 @@ async function collectAndFetchImages(struct, baseUrl) {
         try {
           updateConnectionDetails('Fetching image: ' + (src.length > 40 ? src.substring(0, 37) + '...' : src));
 
+          let r = null;
           // Try direct fetch first
-          let r;
           try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 3000);
             r = await fetch(src, { signal: controller.signal });
             clearTimeout(timeoutId);
           } catch(e) {
-            // If direct fetch fails (CORS or timeout), use proxy
-            console.log('Direct image fetch failed, using proxy:', src);
+            debugLog('[IMAGE] Direct fetch failed:', src, e.message);
+          }
+
+          // If direct fetch fails (CORS or timeout), use proxy
+          if (!r || !r.ok) {
+            debugLog('[IMAGE] Using proxy for:', src);
             const proxyUrl = MCP_SERVER_URL + '/proxy?url=' + encodeURIComponent(src);
-            r = await fetch(proxyUrl);
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 8000);
+              r = await fetch(proxyUrl, { signal: controller.signal });
+              clearTimeout(timeoutId);
+            } catch(e) {
+              debugLog('[IMAGE] Proxy fetch failed:', src, e.message);
+            }
           }
 
           if (r && r.ok) {
             n.imageData = Array.from(new Uint8Array(await r.arrayBuffer()));
+            fetchedCount++;
+          } else {
+            failedCount++;
           }
         } catch(e) {
-          console.warn('Failed to fetch image after proxy attempt:', src);
+          failedCount++;
+          console.warn('Failed to fetch image after all attempts:', src);
         }
       }
       if (n.children) await traverse(n.children);
     }
   }
   await traverse(struct);
-  updateConnectionDetails('All images processed');
+  updateConnectionDetails('Images: ' + fetchedCount + ' fetched' + (failedCount > 0 ? ', ' + failedCount + ' failed' : ''));
 }
 
 // SSE Status Updates
@@ -1694,6 +1804,8 @@ window.onmessage = async function(event) {
       console.error('Error parsing MCP HTML:', e);
     }
   }
+  if (msg.type === 'start-sse-connection') startSSEConnection();
+  if (msg.type === 'stop-sse-connection') stopSSEConnection();
   if (msg.type === 'sse-connected') updateSSEStatus('SSE Connected', 'connected');
   if (msg.type === 'sse-disconnected') updateSSEStatus('SSE Disconnected', 'disconnected');
   if (msg.type === 'mcp-status-update') updateMCPStatus(msg.message, msg.status || 'info');
