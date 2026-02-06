@@ -117,7 +117,8 @@ class FigmaSSEServer {
       }
 
       // URL Proxy endpoint (to bypass CORS)
-      if (parsedUrl.pathname === SERVER_CONFIG.ENDPOINTS.PROXY) {
+      const proxyPath = SERVER_CONFIG.ENDPOINTS.PROXY;
+      if (parsedUrl.pathname === proxyPath || parsedUrl.pathname === proxyPath + '/') {
         this.handleProxyRequest(req, res);
         return;
       }
@@ -162,8 +163,9 @@ class FigmaSSEServer {
       }
 
       // 404 for other paths
+      console.log(`[SSE-SERVER] 404 Not Found: ${req.method} ${parsedUrl.pathname}`);
       res.writeHead(404, { 'Access-Control-Allow-Origin': '*' });
-      res.end('Not Found');
+      res.end(`Not Found: ${parsedUrl.pathname}`);
     });
 
     // Start the server

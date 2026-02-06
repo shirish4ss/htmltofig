@@ -1,6 +1,7 @@
 {
   "name": "HTML, Web & URL to Figma AI",
-  "id": "html-web-url-figma",
+  "id": "1601564914759563502",
+  "documentAccess": "dynamic-page",
   "api": "1.0.0",
   "main": "code.js",
   "ui": "ui.html",
