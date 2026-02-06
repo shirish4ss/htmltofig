@@ -301,6 +301,18 @@
           </div>
 
           <div class="usage-section">
+            <div class="usage-title">Advanced Settings</div>
+            <div class="form-group">
+              <label>Bridge Server URL</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" id="manual-server-input" class="input" style="padding: 8px; font-size: 11px;" placeholder="https://your-server.com">
+                <button id="save-server-btn" class="button" style="width: auto; padding: 0 12px; font-size: 11px;">Save</button>
+              </div>
+              <div class="config-note">Current: <span id="current-server-display" style="color: var(--primary);">Detecting...</span></div>
+            </div>
+          </div>
+
+          <div class="usage-section">
             <div class="usage-title">Try these commands:</div>
             <div class="usage-examples">
               <div class="usage-example">"Create a modern login form and send it to Figma"</div>
@@ -484,6 +496,14 @@ function updateServerBadge(type) {
     badge.style.display = 'inline-block';
     badge.className = 'server-badge ' + type;
     badge.textContent = type === 'local' ? 'LOCAL' : 'PROD';
+  }
+  var display = document.getElementById('current-server-display');
+  if (display) {
+    display.textContent = MCP_SERVER_URL;
+  }
+  var input = document.getElementById('manual-server-input');
+  if (input && !input.value) {
+    input.value = MCP_SERVER_URL;
   }
 }
 
@@ -1562,13 +1582,28 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!url) return;
     if (!url.startsWith('http')) url = 'https://' + url;
 
-    // Use the proxy endpoint on our server to bypass CORS
-    var proxyUrl = MCP_SERVER_URL + '/proxy?url=' + encodeURIComponent(url);
+    if (!MCP_SERVER_URL) {
+      alert('Server not detected yet. Please wait a moment and try again.');
+      detectServer();
+      return;
+    }
 
-    updateConnectionDetails('Fetching via proxy: ' + url + '...');
+    // Ensure no double slashes when joining
+    var baseUrl = MCP_SERVER_URL.replace(/\/+$/, '');
+    var proxyUrl = baseUrl + '/proxy?url=' + encodeURIComponent(url);
+
+    debugLog('[FETCH] Requesting URL via proxy:', url);
+    debugLog('[FETCH] Proxy URL:', proxyUrl);
+    updateConnectionDetails('Fetching via proxy...');
 
     fetch(proxyUrl).then(function(r) {
-      if (!r.ok) throw new Error('Proxy server error: ' + r.status);
+      debugLog('[FETCH] Proxy response status:', r.status);
+      if (!r.ok) {
+        return r.text().then(function(text) {
+          debugLog('[FETCH] Error response body:', text);
+          throw new Error('Proxy server error: ' + r.status + (text ? ' (' + text.substring(0, 100) + ')' : ''));
+        });
+      }
       return r.text();
     }).then(async function(text) {
       uploadedContent = text;
@@ -1683,6 +1718,21 @@ document.addEventListener('DOMContentLoaded', function() {
   };
   document.getElementById('minimize-btn').onclick = toggleMinimize;
   document.getElementById('minimized-expand-btn').onclick = toggleMinimize;
+
+  // Manual server override
+  document.getElementById('save-server-btn').onclick = function() {
+    var val = document.getElementById('manual-server-input').value.trim();
+    if (!val) return;
+    if (!val.startsWith('http')) val = 'https://' + val;
+    val = val.replace(/\/+$/, ''); // Remove trailing slash
+
+    MCP_SERVER_URL = val;
+    serverDetected = true;
+    document.getElementById('current-server-display').textContent = val;
+    updateConnectionDetails('Server set to: ' + val);
+    updateConfigDisplay();
+    alert('Server URL updated to: ' + val);
+  };
 });
 
 // Image fetching logic with CORS proxy fallback and relative URL resolution
@@ -1725,9 +1775,13 @@ async function collectAndFetchImages(struct, baseUrl) {
           // If direct fetch fails (CORS or timeout), use proxy
           if (!r || !r.ok) {
             debugLog('[IMAGE] Using proxy for:', src);
-            const proxyUrl = MCP_SERVER_URL + '/proxy?url=' + encodeURIComponent(src);
-            try {
-              const controller = new AbortController();
+            if (!MCP_SERVER_URL) {
+              debugLog('[IMAGE] Skip proxy: Server not detected');
+            } else {
+              var baseUrl = MCP_SERVER_URL.replace(/\/+$/, '');
+              const proxyUrl = baseUrl + '/proxy?url=' + encodeURIComponent(src);
+              try {
+                const controller = new AbortController();
               const timeoutId = setTimeout(() => controller.abort(), 8000);
               r = await fetch(proxyUrl, { signal: controller.signal });
               clearTimeout(timeoutId);

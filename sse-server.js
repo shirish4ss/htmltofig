@@ -92,39 +92,40 @@ class FigmaSSEServer {
   setupSSEServer() {
     this.httpServer = http.createServer((req, res) => {
       const parsedUrl = url.parse(req.url, true);
+      // Normalize pathname: remove trailing slashes and multiple slashes
+      const pathname = (parsedUrl.pathname || '/').replace(/\/+/g, '/').replace(/\/+$/, '') || '/';
 
       // Handle CORS preflight
       if (req.method === 'OPTIONS') {
         res.writeHead(200, {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
         });
         res.end();
         return;
       }
 
       // SSE Endpoint
-      if (parsedUrl.pathname === SERVER_CONFIG.ENDPOINTS.SSE_STREAM) {
+      if (pathname === SERVER_CONFIG.ENDPOINTS.SSE_STREAM) {
         this.handleSSEConnection(req, res);
         return;
       }
 
       // MCP Trigger endpoint (for MCP server notifications)
-      if (parsedUrl.pathname === SERVER_CONFIG.ENDPOINTS.MCP_TRIGGER && req.method === 'POST') {
+      if (pathname === SERVER_CONFIG.ENDPOINTS.MCP_TRIGGER && req.method === 'POST') {
         this.handleMCPTrigger(req, res);
         return;
       }
 
       // URL Proxy endpoint (to bypass CORS)
-      const proxyPath = SERVER_CONFIG.ENDPOINTS.PROXY;
-      if (parsedUrl.pathname === proxyPath || parsedUrl.pathname === proxyPath + '/') {
+      if (pathname === SERVER_CONFIG.ENDPOINTS.PROXY) {
         this.handleProxyRequest(req, res);
         return;
       }
 
       // Status endpoint
-      if (parsedUrl.pathname === SERVER_CONFIG.ENDPOINTS.HEALTH) {
+      if (pathname === SERVER_CONFIG.ENDPOINTS.HEALTH) {
         res.writeHead(200, {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': SERVER_CONFIG.ALLOWED_ORIGINS
@@ -163,9 +164,20 @@ class FigmaSSEServer {
       }
 
       // 404 for other paths
-      console.log(`[SSE-SERVER] 404 Not Found: ${req.method} ${parsedUrl.pathname}`);
-      res.writeHead(404, { 'Access-Control-Allow-Origin': '*' });
-      res.end(`Not Found: ${parsedUrl.pathname}`);
+      console.log(`[SSE-SERVER] 404 Not Found: ${req.method} ${parsedUrl.pathname} (Normalized: ${pathname})`);
+      console.log(`[SSE-SERVER] Available endpoints:`, Object.values(SERVER_CONFIG.ENDPOINTS));
+
+      res.writeHead(404, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      });
+      res.end(JSON.stringify({
+        error: 'Not Found',
+        path: parsedUrl.pathname,
+        normalizedPath: pathname,
+        method: req.method,
+        availableEndpoints: SERVER_CONFIG.ENDPOINTS
+      }));
     });
 
     // Start the server
