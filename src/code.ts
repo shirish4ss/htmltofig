@@ -1760,24 +1760,6 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
 
         // Remove early height filling - will do it after appendChild
 
-        // Only apply default background if the element doesn't have any background AND it's not inside a gradient container
-        const hasBackground = frame.fills && (frame.fills as Paint[]).length > 0;
-        const isInsideGradientContainer = inheritedStyles?.['parent-has-gradient'];
-
-        // Remove hardcoded backgrounds - let CSS handle all styling
-        if (!hasBackground && !isInsideGradientContainer) {
-          // Check if element has CSS background that should be applied
-          const cssBackgroundColor = node.styles?.['background-color'] || node.styles?.['background'];
-          if (cssBackgroundColor && cssBackgroundColor !== 'transparent') {
-            const bgColor = hexToRgb(cssBackgroundColor);
-            if (bgColor) {
-              frame.fills = [{ type: 'SOLID', color: bgColor }];
-            }
-          } else {
-            // FIXED: Explicitly set no background for elements without CSS background
-            frame.fills = [];
-          }
-        }
 
         // Padding ONLY from CSS - no hardcoded defaults
         // FIXED: Use ?? instead of || to respect padding: 0
@@ -3090,84 +3072,104 @@ figma.ui.onmessage = async (msg) => {
   }
 
   if (msg.type === 'html-structure') {
-    console.log(`[HTML] Processing: ${msg.name || 'Unnamed'}`);
-    debugLog('[MAIN HANDLER] Structure length:', msg.structure?.length || 0);
-    debugLog('[MAIN HANDLER] From MCP:', msg.fromMCP);
+    try {
+      console.log(`[HTML] Processing: ${msg.name || 'Unnamed'}`);
 
-    // ✅ DEDUPLICATION: Check if RequestID was already processed
-    const requestId = msg.requestId || msg.timestamp || `fallback-${Date.now()}`;
-    if (isRequestProcessed(requestId)) {
+      // PRE-LOAD COMMON FONTS (Parallel)
+      try {
+        await Promise.all([
+          figma.loadFontAsync({ family: "Inter", style: "Regular" }),
+          figma.loadFontAsync({ family: "Inter", style: "Bold" }),
+          figma.loadFontAsync({ family: "Inter", style: "Italic" }),
+          figma.loadFontAsync({ family: "Inter", style: "Light" }),
+          figma.loadFontAsync({ family: "Roboto Mono", style: "Regular" })
+        ]);
+      } catch (e) {
+        console.warn('[FONTS] Failed to pre-load some fonts, will try loading individually:', e);
+      }
+
+      debugLog('[MAIN HANDLER] Structure length:', msg.structure?.length || 0);
+      debugLog('[MAIN HANDLER] From MCP:', msg.fromMCP);
+
+      // ✅ DEDUPLICATION: Check if RequestID was already processed
+      const requestId = msg.requestId || msg.timestamp || `fallback-${Date.now()}`;
+      if (isRequestProcessed(requestId)) {
+        // Debug log removed
+        return;
+      }
+
+      // Mark as processed immediately to prevent any race conditions
+      markRequestProcessed(requestId);
       // Debug log removed
-      return;
+
+      // ✅ DESIGN WIDTH DETECTION: Meta tags detectados por UI (si los hay)
+      const metaTagWidth: number | null = msg.detectedWidth || null;
+
+      // ✅ REM BASE DETECTION: Use root font-size detected by UI (from html/root CSS)
+      const detectedRemBase: number | null = msg.detectedRemBase || null;
+      if (detectedRemBase && detectedRemBase > 0) {
+        // Update CSS_CONFIG.remBase for rem unit calculations
+        (CSS_CONFIG as any).remBase = detectedRemBase;
+      }
+
+      // ✅ UNIFIED WIDTH DETECTION: Usa la función centralizada
+      const containerWidth = calculateContainerWidth(msg.structure, metaTagWidth);
+
+      // Update viewportWidth for vw calculations if we have a container width
+      if (containerWidth) {
+        (CSS_CONFIG as any).viewportWidth = containerWidth;
+      }
+
+      // Create a main container frame for all HTML content
+      const mainContainer = figma.createFrame();
+      const containerName = msg.fromMCP ? `${msg.name || 'MCP Import'}` : 'HTML Import Container';
+      mainContainer.name = containerName;
+      mainContainer.fills = []; // Sin fondo - el body lo controla
+
+      // Enable auto-layout - el body controlará el layout interno
+      mainContainer.layoutMode = 'VERTICAL';
+      mainContainer.primaryAxisSizingMode = 'AUTO';
+
+      // Aplicar ancho al contenedor
+      if (containerWidth) {
+        mainContainer.counterAxisSizingMode = 'FIXED';
+        mainContainer.resize(containerWidth, mainContainer.height);
+      } else {
+        mainContainer.counterAxisSizingMode = 'AUTO';
+      }
+
+      // Sin padding ni spacing hardcodeado - respetamos el CSS del HTML
+      mainContainer.paddingLeft = 0;
+      mainContainer.paddingRight = 0;
+      mainContainer.paddingTop = 0;
+      mainContainer.paddingBottom = 0;
+      mainContainer.itemSpacing = 0;
+
+      // Position the container at current viewport center
+      const viewport = figma.viewport.center;
+      mainContainer.x = viewport.x - (containerWidth ? containerWidth / 2 : 200);
+      mainContainer.y = viewport.y - 200;
+
+      // Add to current page
+      figma.currentPage.appendChild(mainContainer);
+
+      debugLog('[MAIN HANDLER] Created main container, calling createFigmaNodesFromStructure...');
+
+      // Create all HTML content inside this container
+      await createFigmaNodesFromStructure(msg.structure, mainContainer, 0, 0, undefined);
+
+      console.log('[HTML] ✅ Conversion completed');
+
+      // Select the created container for immediate visibility
+      figma.currentPage.selection = [mainContainer];
+      figma.viewport.scrollAndZoomIntoView([mainContainer]);
+
+      figma.notify('✅ HTML converted successfully!');
+    } catch (error: any) {
+      console.error('[HTML-CONVERSION-ERROR]', error);
+      figma.notify(`❌ Error: ${error.message || 'Conversion failed'}`, { error: true });
+      figma.ui.postMessage({ type: 'conversion-error', message: error.message });
     }
-
-    // Mark as processed immediately to prevent any race conditions
-    markRequestProcessed(requestId);
-    // Debug log removed
-
-    // ✅ DESIGN WIDTH DETECTION: Meta tags detectados por UI (si los hay)
-    const metaTagWidth: number | null = msg.detectedWidth || null;
-
-    // ✅ REM BASE DETECTION: Use root font-size detected by UI (from html/root CSS)
-    const detectedRemBase: number | null = msg.detectedRemBase || null;
-    if (detectedRemBase && detectedRemBase > 0) {
-      // Update CSS_CONFIG.remBase for rem unit calculations
-      (CSS_CONFIG as any).remBase = detectedRemBase;
-    }
-
-    // ✅ UNIFIED WIDTH DETECTION: Usa la función centralizada
-    const containerWidth = calculateContainerWidth(msg.structure, metaTagWidth);
-
-    // Update viewportWidth for vw calculations if we have a container width
-    if (containerWidth) {
-      (CSS_CONFIG as any).viewportWidth = containerWidth;
-    }
-
-    // Create a main container frame for all HTML content
-    const mainContainer = figma.createFrame();
-    const containerName = msg.fromMCP ? `${msg.name || 'MCP Import'}` : 'HTML Import Container';
-    mainContainer.name = containerName;
-    mainContainer.fills = []; // Sin fondo - el body lo controla
-
-    // Enable auto-layout - el body controlará el layout interno
-    mainContainer.layoutMode = 'VERTICAL';
-    mainContainer.primaryAxisSizingMode = 'AUTO';
-
-    // Aplicar ancho al contenedor
-    if (containerWidth) {
-      mainContainer.counterAxisSizingMode = 'FIXED';
-      mainContainer.resize(containerWidth, mainContainer.height);
-    } else {
-      mainContainer.counterAxisSizingMode = 'AUTO';
-    }
-
-    // Sin padding ni spacing hardcodeado - respetamos el CSS del HTML
-    mainContainer.paddingLeft = 0;
-    mainContainer.paddingRight = 0;
-    mainContainer.paddingTop = 0;
-    mainContainer.paddingBottom = 0;
-    mainContainer.itemSpacing = 0;
-
-    // Position the container at current viewport center
-    const viewport = figma.viewport.center;
-    mainContainer.x = viewport.x - (containerWidth ? containerWidth / 2 : 200);
-    mainContainer.y = viewport.y - 200;
-
-    // Add to current page
-    figma.currentPage.appendChild(mainContainer);
-
-    debugLog('[MAIN HANDLER] Created main container, calling createFigmaNodesFromStructure...');
-
-    // Create all HTML content inside this container
-    await createFigmaNodesFromStructure(msg.structure, mainContainer, 0, 0, undefined);
-
-    console.log('[HTML] ✅ Conversion completed');
-
-    // Select the created container for immediate visibility
-    figma.currentPage.selection = [mainContainer];
-    figma.viewport.scrollAndZoomIntoView([mainContainer]);
-
-    figma.notify('✅ HTML converted successfully!');
   }
 
   // MCP MONITORING HANDLERS

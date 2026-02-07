@@ -622,8 +622,12 @@ async function simpleParseHTML(htmlStr, additionalCss) {
     await new Promise(r => setTimeout(r, 800));
   }
 
-  // 2. Inject HTML content
-  container.innerHTML = htmlStr;
+  // 2. Inject HTML content - Ensure we only take the body content if it's a full document
+  if (doc.body) {
+    container.innerHTML = doc.body.innerHTML;
+  } else {
+    container.innerHTML = htmlStr;
+  }
 
   if (additionalCss) {
     const styleTag = document.createElement('style');
@@ -1086,31 +1090,54 @@ if (document.readyState === 'loading') {
 }
 
 async function collectAndFetchImages(struct, baseUrl) {
-  async function traverse(nodes) {
+  const fetchPromises = [];
+
+  function traverse(nodes) {
     if (!nodes) return;
     for (let n of nodes) {
       // Regular images
       if (n.tagName === 'img' && n.attributes && n.attributes.src) {
         let src = n.attributes.src;
         if (baseUrl && !src.startsWith('http') && !src.startsWith('data:')) {
-          src = new URL(src, baseUrl).href;
+          try {
+            src = new URL(src, baseUrl).href;
+          } catch (e) {
+            console.warn('[IMAGE] Failed to resolve URL:', src, baseUrl);
+          }
         }
         if (!src.startsWith('data:')) {
-          n.imageData = await fetchImage(src);
+          fetchPromises.push((async () => {
+            n.imageData = await fetchImage(src);
+          })());
         }
       }
+
       // Background images
       if (n.bgImageUrl) {
         let src = n.bgImageUrl;
         if (baseUrl && !src.startsWith('http') && !src.startsWith('data:')) {
-          src = new URL(src, baseUrl).href;
+          try {
+            src = new URL(src, baseUrl).href;
+          } catch (e) {
+            console.warn('[BG-IMAGE] Failed to resolve URL:', src, baseUrl);
+          }
         }
-        n.bgImageData = await fetchImage(src);
+        fetchPromises.push((async () => {
+          n.bgImageData = await fetchImage(src);
+        })());
       }
-      if (n.children) await traverse(n.children);
+
+      if (n.children) traverse(n.children);
     }
   }
-  await traverse(struct);
+
+  traverse(struct);
+
+  if (fetchPromises.length > 0) {
+    debugLog(`[ASSET] Fetching ${fetchPromises.length} assets in parallel...`);
+    await Promise.all(fetchPromises);
+    debugLog(`[ASSET] All assets fetched.`);
+  }
 }
 
 async function fetchImage(src) {
