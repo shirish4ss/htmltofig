@@ -530,7 +530,8 @@ function getElementStyles(element) {
     'border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius',
     'color', 'font-family', 'font-size', 'font-weight', 'font-style', 'line-height',
     'text-align', 'text-decoration', 'text-transform', 'letter-spacing', 'white-space', 'opacity',
-    'box-shadow', 'filter', 'backdrop-filter', 'clip-path', 'visibility', 'overflow'
+    'box-shadow', 'filter', 'backdrop-filter', 'clip-path', 'visibility', 'overflow',
+    'border-spacing', 'border-collapse', 'table-layout', 'vertical-align', 'list-style-type'
   ];
 
   for (const prop of props) {
@@ -556,17 +557,57 @@ async function simpleParseHTML(htmlStr, additionalCss) {
 
   // Extract <link> and <script> tags
   const links = Array.from(doc.querySelectorAll('link[rel="stylesheet"], script[src]'));
+
+  // Also check for @import in any existing style tags
+  const styleTags = Array.from(doc.querySelectorAll('style'));
+  styleTags.forEach(style => {
+    const imports = style.textContent.match(/@import\s+url\(['"]?([^'"]+)['"]?\)/g);
+    if (imports) {
+      imports.forEach(imp => {
+        const url = imp.match(/url\(['"]?([^'"]+)['"]?\)/)[1];
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = url;
+        links.push(link);
+      });
+    }
+  });
+
   const loadPromises = [];
 
+  // Determine base URL for relative resource resolution
+  let docBaseUrl = null;
+  const baseTag = doc.querySelector('base');
+  if (baseTag && baseTag.href) docBaseUrl = baseTag.href;
+
+  // Use the provided window.lastUploadedUrl if we're doing a URL import
+  const finalBaseUrl = docBaseUrl || window.lastUploadedUrl || null;
+
   links.forEach(node => {
-    const clone = document.createElement(node.tagName);
-    Array.from(node.attributes).forEach(attr => clone.setAttribute(attr.name, attr.value));
+    const tagName = node.tagName.toLowerCase();
+    const clone = document.createElement(tagName);
+    Array.from(node.attributes).forEach(attr => {
+      let value = attr.value;
+      // Resolve relative URLs
+      if ((attr.name === 'href' || attr.name === 'src') && finalBaseUrl && !value.startsWith('http') && !value.startsWith('data:') && !value.startsWith('//')) {
+        try {
+          value = new URL(value, finalBaseUrl).href;
+        } catch (e) {}
+      }
+      clone.setAttribute(attr.name, value);
+    });
 
     const promise = new Promise((resolve) => {
-      clone.onload = resolve;
-      clone.onerror = resolve; // Continue even on error
-      // Timeout after 3s
-      setTimeout(resolve, 3000);
+      clone.onload = () => {
+        debugLog(`[ASSET] Loaded: ${node.href || node.src}`);
+        resolve();
+      };
+      clone.onerror = () => {
+        debugLog(`[ASSET] Failed: ${node.href || node.src}`);
+        resolve(); // Continue even on error
+      };
+      // Timeout after 5s for better reliability
+      setTimeout(resolve, 5000);
     });
 
     loadPromises.push(promise);
@@ -575,9 +616,10 @@ async function simpleParseHTML(htmlStr, additionalCss) {
 
   // Wait for all external resources to load
   if (loadPromises.length > 0) {
+    showStatus('Loading external resources...');
     await Promise.all(loadPromises);
     // Give a small buffer for Tailwind to process the DOM if it just loaded
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 800));
   }
 
   // 2. Inject HTML content

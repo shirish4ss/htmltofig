@@ -40,6 +40,7 @@ export interface GradientStop {
 export interface GradientResult {
   gradientStops?: GradientStop[];
   fallbackColor?: string;
+  angle?: number; // In degrees
 }
 
 /**
@@ -203,6 +204,26 @@ export function parseLinearGradient(gradientStr: string): GradientResult | null 
       startIdx = 1;
     }
 
+    // Parse angle/direction
+    let angle = 180; // Default CSS linear-gradient is top-to-bottom (180deg in Figma?)
+    // Actually, CSS default is 'to bottom' which is 180deg.
+    // Figma 0deg is horizontal left-to-right? No, Figma gradientTransform is complex.
+
+    if (startIdx === 1) {
+      const dir = parts[0].toLowerCase();
+      if (dir.includes('deg')) {
+        angle = parseFloat(dir) || 180;
+      } else if (dir.includes('to right')) {
+        angle = 90;
+      } else if (dir.includes('to left')) {
+        angle = 270;
+      } else if (dir.includes('to top')) {
+        angle = 0;
+      } else if (dir.includes('to bottom')) {
+        angle = 180;
+      }
+    }
+
     const colorParts = parts.slice(startIdx);
     const increment = colorParts.length > 1 ? 1 / (colorParts.length - 1) : 1;
 
@@ -225,7 +246,7 @@ export function parseLinearGradient(gradientStr: string): GradientResult | null 
     if (stops.length >= 2) {
       // Ensure last stop is at position 1
       stops[stops.length - 1].position = 1;
-      return { gradientStops: stops };
+      return { gradientStops: stops, angle: angle };
     }
 
     // If gradient parsing failed, try to extract fallback color

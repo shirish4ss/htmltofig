@@ -346,13 +346,36 @@ function applyStylesToFrame(frame: FrameNode, styles: any) {
     const gradient = parseLinearGradient(styles['background']);
 
     if (gradient && gradient.gradientStops && gradient.gradientStops.length >= 2) {
-      // FIX: Create proper gradient fills with opacity support
+      // Improved gradient transform based on angle
+      let transform: Transform = [[1, 0, 0], [0, 1, 0]]; // Default Horizontal
+
+      const angle = (gradient as any).angle;
+      if (angle !== undefined) {
+        // Convert CSS angle to Figma gradientTransform
+        // CSS 180deg (to bottom) -> Figma Vertical [[0, 1, 0], [-1, 0, 1]]
+        // CSS 90deg (to right) -> Figma Horizontal [[1, 0, 0], [0, 1, 0]]
+        // CSS 0deg (to top) -> Figma Vertical [[0, -1, 1], [1, 0, 0]]
+        // CSS 270deg (to left) -> Figma Horizontal [[-1, 0, 1], [0, -1, 1]]
+
+        if (angle === 180) transform = [[0, 1, 0], [-1, 0, 1]];
+        else if (angle === 90) transform = [[1, 0, 0], [0, 1, 0]];
+        else if (angle === 0) transform = [[0, -1, 1], [1, 0, 0]];
+        else if (angle === 270) transform = [[-1, 0, 1], [0, -1, 1]];
+        else {
+          // Approximate rotation for other angles
+          const rad = (angle - 90) * (Math.PI / 180);
+          const cos = Math.cos(rad);
+          const sin = Math.sin(rad);
+          transform = [
+            [cos, sin, (1 - cos - sin) / 2],
+            [-sin, cos, (1 + sin - cos) / 2]
+          ];
+        }
+      }
+
       frame.fills = [{
         type: 'GRADIENT_LINEAR',
-        gradientTransform: [
-          [1, 0, 0],
-          [0, 1, 0]
-        ],
+        gradientTransform: transform,
         gradientStops: gradient.gradientStops.map((stop: any) => ({
           position: stop.position,
           color: { r: stop.color.r, g: stop.color.g, b: stop.color.b, a: stop.color.a || 1 }
@@ -444,32 +467,48 @@ function applyStylesToFrame(frame: FrameNode, styles: any) {
 
   // FLEX GROW: Movido a createFigmaNodesFromStructure donde tiene acceso a node y parentFrame
 
-  // Border (mejorado para extraer color de 'border')
-  const borderProperties = ['border', 'border-top', 'border-right', 'border-bottom', 'border-left'];
-  for (let i = 0; i < borderProperties.length; i++) {
-    const prop = borderProperties[i];
-    if (styles[prop] || styles[prop + '-width'] || styles[prop + '-color'] || styles[prop + '-style']) {
-      // Extraer color de la propiedad 'border' si existe
-      let borderColor = null;
-      if (styles[prop]) {
-        borderColor = extractBorderColor(styles[prop]);
-      }
-      // Si no, usar border-color
-      if (!borderColor && styles[prop + '-color']) {
-        borderColor = styles[prop + '-color'];
-      }
-      // Si sigue sin color, usar gris claro por defecto
-      if (!borderColor) {
-        borderColor = '#dddddd';
-      }
-      const borderWidth = parseSize(styles[prop + '-width'] || styles[prop]) || 1;
-      const colorObj = hexToRgb(borderColor) || {r: 0.87, g: 0.87, b: 0.87};
-      if (i === 0) { // General border
-        frame.strokes = [{ type: 'SOLID', color: colorObj }];
-        frame.strokeWeight = borderWidth;
-      }
+  // Individual Border Support (Figma 4.0+)
+  const hasBorder = (side?: string) => {
+    const prop = side ? `border-${side}` : 'border';
+    return styles[prop] || styles[`${prop}-width`] || styles[`${prop}-color`] || styles[`${prop}-style`];
+  };
+
+  if (hasBorder()) {
+    const borderColor = extractBorderColor(styles['border']) || styles['border-color'] || '#dddddd';
+    const borderWidth = parseSize(styles['border-width'] || styles['border']) || 0;
+    const colorObj = hexToRgb(borderColor) || {r: 0.87, g: 0.87, b: 0.87};
+
+    if (borderWidth > 0) {
+      frame.strokes = [{ type: 'SOLID', color: colorObj }];
+      frame.strokeWeight = borderWidth;
     }
   }
+
+  // Handle individual sides
+  const sides = ['top', 'right', 'bottom', 'left'] as const;
+  sides.forEach(side => {
+    if (hasBorder(side)) {
+      const borderColor = extractBorderColor(styles[`border-${side}`]) || styles[`border-${side}-color`] || styles['border-color'] || '#dddddd';
+      const borderWidth = parseSize(styles[`border-${side}-width`] || styles[`border-${side}`]) || 0;
+      const colorObj = hexToRgb(borderColor) || {r: 0.87, g: 0.87, b: 0.87};
+
+      if (borderWidth > 0) {
+        // If no general strokes yet, initialize
+        if (frame.strokes.length === 0) {
+          frame.strokes = [{ type: 'SOLID', color: colorObj }];
+        }
+
+        try {
+          if (side === 'top') frame.strokeTopWeight = borderWidth;
+          else if (side === 'right') frame.strokeRightWeight = borderWidth;
+          else if (side === 'bottom') frame.strokeBottomWeight = borderWidth;
+          else if (side === 'left') frame.strokeLeftWeight = borderWidth;
+        } catch (e) {
+          console.warn(`Individual stroke not supported for side ${side}`);
+        }
+      }
+    }
+  });
 
   // Border radius
   const borderRadius = parseSize(styles['border-radius']);
@@ -1591,7 +1630,7 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
 
       // Elementos que siempre son frames + cualquier elemento con display:flex/grid/inline-flex
       const isFlexOrGrid = node.styles?.display === 'flex' || node.styles?.display === 'inline-flex' || node.styles?.display === 'grid';
-      const isContainerTag = ['body', 'div', 'section', 'article', 'nav', 'header', 'footer', 'main', 'aside', 'blockquote', 'figure', 'figcaption', 'address', 'details', 'summary', 'a', 'li', 'ul', 'ol'].includes(node.tagName);
+      const isContainerTag = ['body', 'div', 'section', 'article', 'nav', 'header', 'footer', 'main', 'aside', 'blockquote', 'figure', 'figcaption', 'address', 'details', 'summary', 'a', 'li', 'ul', 'ol', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(node.tagName);
 
       if (isContainerTag || isFlexOrGrid) {
         const frame = figma.createFrame();
@@ -1599,16 +1638,23 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
 
         // LAYOUT MODE: Aplicar display CSS directamente PRIMERO
         let layoutMode: 'HORIZONTAL' | 'VERTICAL' = 'VERTICAL';
-        if (node.styles?.display === 'flex' || node.styles?.display === 'inline-flex') {
-          // Flex direction: row = HORIZONTAL, column = VERTICAL
+        const display = node.styles?.display || 'block';
+
+        if (display.includes('flex')) {
           layoutMode = node.styles?.['flex-direction'] === 'column' ? 'VERTICAL' : 'HORIZONTAL';
-        } else if (node.styles?.display === 'grid') {
-          // Initial layout set to VERTICAL, will be changed to native GRID mode
-          // in createGridLayoutWithSpans() or createGridLayout() during child processing
+        } else if (display === 'grid') {
           layoutMode = 'VERTICAL';
-        } else if (node.styles?.display === 'inline' || node.styles?.display === 'inline-block') {
-          // Inline elements: children flow horizontally
+        } else if (display.includes('inline') || ['span', 'a', 'strong', 'b', 'em', 'i', 'code', 'small', 'label'].includes(node.tagName)) {
           layoutMode = 'HORIZONTAL';
+        } else {
+          // Heuristic: if all children are inline tags, use HORIZONTAL with WRAP
+          const inlineTags = ['span', 'a', 'strong', 'b', 'em', 'i', 'code', 'small', 'label', 'img', 'button', 'input', 'select'];
+          const children = node.children || [];
+          const allInline = children.length > 0 && children.every((c: any) => inlineTags.includes(c.tagName));
+          if (allInline) {
+            layoutMode = 'HORIZONTAL';
+            frame.layoutWrap = 'WRAP';
+          }
         }
 
         // SIDEBAR PATTERN DETECTION: Si hay hijo con position:fixed/width + hijo con margin-left
@@ -1632,6 +1678,9 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
 
         // FIXED: Support flex-wrap
         if (node.styles?.['flex-wrap'] === 'wrap' || node.styles?.['flex-wrap'] === 'wrap-reverse') {
+          frame.layoutWrap = 'WRAP';
+        } else if (layoutMode === 'HORIZONTAL' && !isFlexOrGrid) {
+          // Default to wrap for non-flex horizontal layouts (standard inline flow)
           frame.layoutWrap = 'WRAP';
         }
 
@@ -1705,7 +1754,7 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
 
         // FIXED: Determine if element should fill width based on CSS display property
         // Block-level elements fill width, inline elements don't
-        const display = node.styles?.display || 'block'; // Default is block for div
+        // display is already declared at the top of the block
         const isInlineElement = display === 'inline' || display === 'inline-block' || display === 'inline-flex';
         const needsFullWidth = !isInlineElement; // Only block-level elements fill parent width
 
@@ -2094,10 +2143,17 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
               if (frame.layoutMode === 'HORIZONTAL' && hasOnlyText && wantsCentering) {
                 textNode.layoutSizingHorizontal = 'FILL';
                 textNode.textAutoResize = 'HEIGHT';
+            textNode.textAlignHorizontal = 'CENTER';
               } else if (frame.layoutMode === 'HORIZONTAL') {
-                // Mixed content with elements - use HUG so text sits inline
-                textNode.layoutSizingHorizontal = 'HUG';
-                textNode.textAutoResize = 'WIDTH_AND_HEIGHT';
+            // In HORIZONTAL layout, text should HUG if it's meant to be inline
+            // But if it's the only child and we want it to wrap at container edge:
+            if (node.mixedContent.length === 1) {
+              textNode.layoutSizingHorizontal = 'FILL';
+              textNode.textAutoResize = 'HEIGHT';
+            } else {
+              textNode.layoutSizingHorizontal = 'HUG';
+              textNode.textAutoResize = 'WIDTH_AND_HEIGHT';
+            }
               } else if (frame.layoutMode === 'VERTICAL') {
                 textNode.layoutSizingHorizontal = 'FILL';
                 textNode.textAutoResize = 'HEIGHT';
@@ -2405,34 +2461,19 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
         }
 
       } else if (node.tagName === 'table') {
-        const tableWidth = parseSize(node.styles?.width) || 500; // Increased default width
-        let tableHeight = 60; // Base height for header
-
-        // Calculate table height based on rows
-        const bodyRows = node.children.filter((c: any) =>
-          c.tagName === 'tbody' || c.tagName === 'tr'
-        );
-        const totalRows = bodyRows.reduce((count: number, section: any) => {
-          if (section.tagName === 'tbody') {
-            return count + section.children.filter((c: any) => c.tagName === 'tr').length;
-          }
-          return count + 1;
-        }, 0);
-
-        tableHeight += totalRows * 55; // 55px per row (aumentado de 45)
-
         const table = figma.createFrame();
-        table.resize(tableWidth, tableHeight);
-        table.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
-        table.strokes = [{ type: 'SOLID', color: { r: 0.8, g: 0.8, b: 0.8 } }];
-        table.strokeWeight = 1;
         table.name = 'TABLE';
         table.layoutMode = 'VERTICAL';
         table.primaryAxisSizingMode = 'AUTO';
         table.counterAxisSizingMode = 'AUTO';
-        table.itemSpacing = 0;
-        table.paddingTop = 10;
-        table.paddingBottom = 10;
+
+        // Table default styles
+        table.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
+        table.strokes = [{ type: 'SOLID', color: { r: 0.8, g: 0.8, b: 0.8 } }];
+        table.strokeWeight = 1;
+
+        const borderSpacing = parseSize(node.styles?.['border-spacing']) || 0;
+        table.itemSpacing = borderSpacing;
 
         if (node.styles) {
           applyStylesToFrame(table, node.styles);
@@ -2444,40 +2485,31 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
           figma.currentPage.appendChild(table);
         } else {
           parentFrame.appendChild(table);
+          if (!node.styles?.width) table.layoutSizingHorizontal = 'FILL';
         }
 
         await createFigmaNodesFromStructure(node.children, table, 0, 0, inheritedStyles);
 
       } else if (['tr', 'thead', 'tbody'].includes(node.tagName)) {
         if (node.tagName === 'thead' || node.tagName === 'tbody') {
-          // Process container elements, create their children directly
           await createFigmaNodesFromStructure(node.children, parentFrame, 0, 0, inheritedStyles);
         } else {
-          // This is a TR (table row)
           const row = figma.createFrame();
-          row.resize(450, 55); // Aumentado de 45 a 55
-
-          // Check if this row contains th elements (header row)
-          const isHeaderRow = node.children.some((c: any) => c.tagName === 'th');
-          row.fills = isHeaderRow ?
-            [{ type: 'SOLID', color: { r: 0.97, g: 0.97, b: 0.98 } }] :
-            [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
-
-          row.strokes = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }];
-          row.strokeWeight = 1;
           row.name = 'TABLE ROW';
           row.layoutMode = 'HORIZONTAL';
-          row.primaryAxisSizingMode = 'AUTO';
-          row.counterAxisSizingMode = 'AUTO';
-          row.paddingLeft = 8;
-          row.paddingRight = 8;
+          row.primaryAxisSizingMode = 'AUTO'; // PRIMARY is Horizontal for row
+          row.counterAxisSizingMode = 'AUTO'; // COUNTER is Vertical for row
 
-          if (!parentFrame) {
-            row.x = startX;
-            row.y = startY;
-            figma.currentPage.appendChild(row);
-          } else {
+          row.fills = [];
+          row.itemSpacing = parseSize(inheritedStyles?.['border-spacing']) || 0;
+
+          if (node.styles) {
+            applyStylesToFrame(row, node.styles);
+          }
+
+          if (parentFrame) {
             parentFrame.appendChild(row);
+            row.layoutSizingHorizontal = 'FILL';
           }
 
           await createFigmaNodesFromStructure(node.children, row, 0, 0, inheritedStyles);
@@ -2485,105 +2517,30 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
 
       } else if (['td', 'th'].includes(node.tagName)) {
         const cell = figma.createFrame();
-
-        // FIXED: Use CSS dimensions or auto-size
-        const cellWidth = parseSize(node.styles?.width) || 100; // Reasonable default
-        const cellHeight = parseSize(node.styles?.height) || 40;
-        cell.resize(cellWidth, cellHeight);
-
-        // FIXED: Use CSS background-color or transparent
-        const bgColor = node.styles?.['background-color'] || node.styles?.background;
-        if (bgColor && bgColor !== 'transparent') {
-          const parsedBg = hexToRgb(bgColor);
-          cell.fills = parsedBg ? [{ type: 'SOLID', color: parsedBg }] : [];
-        } else {
-          cell.fills = [];
-        }
-
-        // FIXED: Use CSS border or light default
-        const borderColor = node.styles?.['border-color'];
-        if (borderColor) {
-          const parsedBorder = hexToRgb(borderColor);
-          cell.strokes = parsedBorder ? [{ type: 'SOLID', color: parsedBorder }] : [];
-        } else {
-          cell.strokes = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }];
-        }
-        cell.strokeWeight = parseSize(node.styles?.['border-width']) ?? 0.5;
-
         cell.name = node.tagName.toUpperCase();
-        cell.layoutMode = 'HORIZONTAL';
-        cell.primaryAxisAlignItems = 'CENTER';
-        cell.counterAxisAlignItems = 'CENTER';
+        cell.layoutMode = 'VERTICAL';
+        cell.primaryAxisSizingMode = 'AUTO';
+        cell.counterAxisSizingMode = 'AUTO';
 
-        // FIXED: Use CSS padding
-        const basePadding = parseSize(node.styles?.padding);
-        cell.paddingLeft = parseSize(node.styles?.['padding-left']) ?? basePadding ?? 8;
-        cell.paddingRight = parseSize(node.styles?.['padding-right']) ?? basePadding ?? 8;
-        cell.paddingTop = parseSize(node.styles?.['padding-top']) ?? basePadding ?? 4;
-        cell.paddingBottom = parseSize(node.styles?.['padding-bottom']) ?? basePadding ?? 4;
+        // Vertical align mapping
+        const vAlign = node.styles?.['vertical-align'];
+        if (vAlign === 'middle') cell.primaryAxisAlignItems = 'CENTER';
+        else if (vAlign === 'bottom') cell.primaryAxisAlignItems = 'MAX';
+        else cell.primaryAxisAlignItems = 'MIN';
 
-        await figma.loadFontAsync({ family: "Inter", style: "Regular" });
-        const cellText = figma.createText();
-
-        // Get text content from node or its children
-        let textContent = '';
-        if (node.text && node.text.trim()) {
-          textContent = node.text.trim();
-        } else if (node.children && node.children.length > 0) {
-          textContent = node.children.map((child: any) => {
-            if (child.type === 'text') return child.text;
-            if (child.type === 'element' && child.tagName === 'button') {
-              return child.text || 'Button';
-            }
-            return child.text || '';
-          }).filter((text: string) => text.trim()).join(' ');
-        }
-
-        cellText.characters = textContent || '';
-
-        // FIXED: Use CSS color or default to black, let CSS override
-        const textColor = node.styles?.color;
-        if (textColor) {
-          const parsedColor = hexToRgb(textColor);
-          cellText.fills = parsedColor ? [{ type: 'SOLID', color: parsedColor }] : [{ type: 'SOLID', color: { r: 0, g: 0, b: 0 } }];
-        } else {
-          cellText.fills = [{ type: 'SOLID', color: { r: 0, g: 0, b: 0 } }];
-        }
-
-        // TH gets bold by default (browser behavior)
-        if (node.tagName === 'th') {
-          figma.loadFontAsync({ family: "Inter", style: "Bold" }).then(() => {
-            cellText.fontName = { family: "Inter", style: "Bold" };
-          }).catch(() => {});
-        }
-
-        cell.appendChild(cellText);
-
-        // Apply additional text styles from CSS
         if (node.styles) {
-          applyStylesToText(cellText, node.styles);
+          applyStylesToFrame(cell, node.styles);
         }
 
-        // Check if parent has text-align center and inherit it
-        if (parentFrame && parentFrame.getPluginData('textAlign') === 'center') {
-          // If parent container has text-align center, apply it to this text
-          if (!node.styles?.['text-align']) {
-            cellText.textAlignHorizontal = 'CENTER';
+        if (parentFrame) {
+          parentFrame.appendChild(cell);
+          // Distribute cells equally if no explicit width
+          if (!node.styles?.width) {
+            cell.layoutSizingHorizontal = 'FILL';
           }
         }
 
-        // Special debug for detail elements
-        if (node.styles?.className?.includes('detail')) {
-        }
-
-        if (!parentFrame) {
-          cell.x = startX;
-          cell.y = startY;
-          figma.currentPage.appendChild(cell);
-        } else {
-          parentFrame.appendChild(cell);
-        }
-
+        await createFigmaNodesFromStructure(node.children, cell, 0, 0, inheritedStyles);
       } else if (node.tagName === 'button') {
         const buttonWidth = parseSize(node.styles?.width) || Math.max(120, (node.text?.length || 6) * 12);
         const buttonHeight = parseSize(node.styles?.height) || 44;
@@ -2769,62 +2726,9 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
           parentFrame.appendChild(text);
         }
 
-      } else if (['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'a', 'label', 'strong', 'b', 'em', 'i', 'code', 'small', 'mark', 'del', 'ins', 'sub', 'sup', 'cite', 'q', 'abbr', 'time'].includes(node.tagName)) {
-
-        // Special handling for elements with backgrounds or mixed content
-        const hasBackground = node.styles?.['background'] || node.styles?.['background-color'];
-        const isBadge = (node.tagName === 'span' || node.tagName === 'a' || node.tagName === 'label') &&
-                        hasBackground && hasBackground !== 'transparent' && hasBackground !== 'rgba(0, 0, 0, 0)';
-        const hasMixedContent = node.mixedContent && node.mixedContent.length > 0;
-
-        if (isBadge || hasMixedContent) {
-          // Create as a FrameNode to support background or nested elements
-          const frame = figma.createFrame();
-          frame.name = node.tagName.toUpperCase() + (isBadge ? ' Badge' : ' Frame');
-
-          // Default to horizontal for inline-like text tags
-          frame.layoutMode = 'HORIZONTAL';
-          frame.primaryAxisSizingMode = 'AUTO';
-          frame.counterAxisSizingMode = 'AUTO';
-          frame.primaryAxisAlignItems = 'CENTER';
-          frame.counterAxisAlignItems = 'CENTER';
-          frame.itemSpacing = 4; // Tight spacing for text elements
-
-          // Apply styles
-          if (node.styles) {
-            applyStylesToFrame(frame, node.styles);
-          }
-
-          if (!parentFrame) {
-            frame.x = startX; frame.y = startY;
-            figma.currentPage.appendChild(frame);
-          } else {
-            parentFrame.appendChild(frame);
-          }
-
-          // Process mixed content or children
-          if (hasMixedContent) {
-            await figma.loadFontAsync({ family: "Inter", style: "Regular" });
-            for (const item of node.mixedContent) {
-              if (item.type === 'text' && item.text && item.text.trim()) {
-                const tNode = figma.createText();
-                tNode.characters = item.text.trim();
-                applyStylesToText(tNode, node.styles);
-                frame.appendChild(tNode);
-              } else if (item.type === 'element' && item.node) {
-                await createFigmaNodesFromStructure([item.node], frame, 0, 0, node.styles);
-              }
-            }
-          } else if (node.text && node.text.trim()) {
-            await figma.loadFontAsync({ family: "Inter", style: "Regular" });
-            const tNode = figma.createText();
-            tNode.characters = node.text.trim();
-            applyStylesToText(tNode, node.styles);
-            frame.appendChild(tNode);
-          }
-
-          continue;
-        }
+      } else if (['span', 'a', 'label', 'strong', 'b', 'em', 'i', 'code', 'small', 'mark', 'del', 'ins', 'sub', 'sup', 'cite', 'q', 'abbr', 'time'].includes(node.tagName)) {
+        // Handle remaining inline elements that weren't caught by isContainerTag
+        // (though most are now included in the container flow for better nesting support)
 
         // Regular text handling for simple text tags
         await figma.loadFontAsync({ family: "Inter", style: "Regular" });
