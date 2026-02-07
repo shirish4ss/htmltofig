@@ -913,19 +913,23 @@
           }
         }
       }
-    } else if (styles["background-color"] && styles["background-color"] !== "transparent" && styles["background-color"] !== "rgba(0, 0, 0, 0)" || styles["background"] && !styles["background"].includes("gradient") && styles["background"] !== "transparent" && styles["background"] !== "rgba(0, 0, 0, 0)") {
+    } else if (styles["background-color"] || styles["background"]) {
       const bgColorValue = styles["background-color"] || styles["background"];
-      const bgColorWithAlpha = hexToRgba(bgColorValue);
-      if (bgColorWithAlpha && bgColorWithAlpha.a > 0) {
-        frame.fills = [{
-          type: "SOLID",
-          color: { r: bgColorWithAlpha.r, g: bgColorWithAlpha.g, b: bgColorWithAlpha.b },
-          opacity: bgColorWithAlpha.a
-        }];
-      } else {
+      if (bgColorValue === "transparent" || bgColorValue === "rgba(0, 0, 0, 0)" || bgColorValue === "none") {
         frame.fills = [];
+      } else {
+        const bgColorWithAlpha = hexToRgba(bgColorValue);
+        if (bgColorWithAlpha && bgColorWithAlpha.a > 0) {
+          frame.fills = [{
+            type: "SOLID",
+            color: { r: bgColorWithAlpha.r, g: bgColorWithAlpha.g, b: bgColorWithAlpha.b },
+            opacity: bgColorWithAlpha.a
+          }];
+        } else {
+          frame.fills = [];
+        }
       }
-    } else if (!hasExplicitBackground || styles["background-color"] === "transparent" || styles["background-color"] === "rgba(0, 0, 0, 0)") {
+    } else {
       frame.fills = [];
     }
     if (styles.width) {
@@ -1084,39 +1088,54 @@
         else if (side === "left") frame.paddingLeft = value;
       }
     });
-    if (styles.gap) {
-      const gapValue = parseSize(styles.gap);
-      if (gapValue && gapValue > 0) {
-        frame.itemSpacing = gapValue;
+    const gapValue = parseSize(styles.gap || styles["column-gap"] || styles["row-gap"]);
+    if (gapValue !== null && gapValue >= 0) {
+      frame.itemSpacing = gapValue;
+    }
+    const justifyContent = styles["justify-content"];
+    const alignItems = styles["align-items"];
+    if (justifyContent) {
+      switch (justifyContent) {
+        case "center":
+          frame.primaryAxisAlignItems = "CENTER";
+          break;
+        case "space-between":
+          frame.primaryAxisAlignItems = "SPACE_BETWEEN";
+          break;
+        case "space-around":
+        case "space-evenly":
+          frame.primaryAxisAlignItems = "SPACE_BETWEEN";
+          break;
+        case "flex-start":
+        case "start":
+          frame.primaryAxisAlignItems = "MIN";
+          break;
+        case "flex-end":
+        case "end":
+          frame.primaryAxisAlignItems = "MAX";
+          break;
       }
     }
-    if (styles["justify-content"] === "center") {
-      frame.primaryAxisAlignItems = "CENTER";
-    } else if (styles["justify-content"] === "space-between") {
-      frame.primaryAxisAlignItems = "SPACE_BETWEEN";
-      if (frame.layoutMode === "HORIZONTAL" && !styles.width && frame.width < 200) {
-        frame.minWidth = Math.max(frame.width * 1.5, 200);
+    if (alignItems) {
+      switch (alignItems) {
+        case "center":
+          frame.counterAxisAlignItems = "CENTER";
+          break;
+        case "flex-start":
+        case "start":
+          frame.counterAxisAlignItems = "MIN";
+          break;
+        case "flex-end":
+        case "end":
+          frame.counterAxisAlignItems = "MAX";
+          break;
+        case "baseline":
+          frame.counterAxisAlignItems = "BASELINE";
+          break;
+        case "stretch":
+          frame.counterAxisAlignItems = "CENTER";
+          break;
       }
-    } else if (styles["justify-content"] === "space-around") {
-      frame.primaryAxisAlignItems = "SPACE_BETWEEN";
-      if (frame.layoutMode === "HORIZONTAL" && !styles.width && frame.width < 200) {
-        frame.minWidth = Math.max(frame.width * 1.5, 200);
-      }
-    } else if (styles["justify-content"] === "flex-start") {
-      frame.primaryAxisAlignItems = "MIN";
-    } else if (styles["justify-content"] === "flex-end") {
-      frame.primaryAxisAlignItems = "MAX";
-    } else if (styles["justify-content"] === "space-evenly") {
-      frame.primaryAxisAlignItems = "SPACE_BETWEEN";
-    }
-    if (styles["align-items"] === "center") {
-      frame.counterAxisAlignItems = "CENTER";
-    } else if (styles["align-items"] === "flex-start" || styles["align-items"] === "start") {
-      frame.counterAxisAlignItems = "MIN";
-    } else if (styles["align-items"] === "flex-end" || styles["align-items"] === "end") {
-      frame.counterAxisAlignItems = "MAX";
-    } else if (styles["align-items"] === "baseline") {
-      frame.counterAxisAlignItems = "BASELINE";
     }
     if (styles["overflow"] === "hidden" || styles["overflow-x"] === "hidden" || styles["overflow-y"] === "hidden") {
       frame.clipsContent = true;
@@ -2577,113 +2596,120 @@
             parentFrame.appendChild(text);
           }
         } else if (["p", "h1", "h2", "h3", "h4", "h5", "h6", "span", "a", "label", "strong", "b", "em", "i", "code", "small", "mark", "del", "ins", "sub", "sup", "cite", "q", "abbr", "time"].includes(node.tagName)) {
-          const hasNoDirectText = !node.text || !node.text.trim();
-          const hasChildren = node.children && node.children.length > 0;
-          if (hasNoDirectText && hasChildren) {
-            await createFigmaNodesFromStructure(node.children, parentFrame, startX, startY, inheritedStyles);
+          const hasBackground = ((_Lc = node.styles) == null ? void 0 : _Lc["background"]) || ((_Mc = node.styles) == null ? void 0 : _Mc["background-color"]);
+          const isBadge = (node.tagName === "span" || node.tagName === "a" || node.tagName === "label") && hasBackground && hasBackground !== "transparent" && hasBackground !== "rgba(0, 0, 0, 0)";
+          const hasMixedContent = node.mixedContent && node.mixedContent.length > 0;
+          if (isBadge || hasMixedContent) {
+            const frame = figma.createFrame();
+            frame.name = node.tagName.toUpperCase() + (isBadge ? " Badge" : " Frame");
+            frame.layoutMode = "HORIZONTAL";
+            frame.primaryAxisSizingMode = "AUTO";
+            frame.counterAxisSizingMode = "AUTO";
+            frame.primaryAxisAlignItems = "CENTER";
+            frame.counterAxisAlignItems = "CENTER";
+            frame.itemSpacing = 4;
+            if (node.styles) {
+              applyStylesToFrame(frame, node.styles);
+            }
+            if (!parentFrame) {
+              frame.x = startX;
+              frame.y = startY;
+              figma.currentPage.appendChild(frame);
+            } else {
+              parentFrame.appendChild(frame);
+            }
+            if (hasMixedContent) {
+              await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+              for (const item of node.mixedContent) {
+                if (item.type === "text" && item.text && item.text.trim()) {
+                  const tNode = figma.createText();
+                  tNode.characters = item.text.trim();
+                  applyStylesToText(tNode, node.styles);
+                  frame.appendChild(tNode);
+                } else if (item.type === "element" && item.node) {
+                  await createFigmaNodesFromStructure([item.node], frame, 0, 0, node.styles);
+                }
+              }
+            } else if (node.text && node.text.trim()) {
+              await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+              const tNode = figma.createText();
+              tNode.characters = node.text.trim();
+              applyStylesToText(tNode, node.styles);
+              frame.appendChild(tNode);
+            }
             continue;
           }
-          const hasBackground = ((_Lc = node.styles) == null ? void 0 : _Lc["background"]) || ((_Mc = node.styles) == null ? void 0 : _Mc["background-color"]);
-          const isSpanWithBackground = node.tagName === "span" && hasBackground && hasBackground !== "transparent";
-          if (isSpanWithBackground) {
-            const spanFrame = figma.createFrame();
-            spanFrame.name = "BADGE Frame";
-            spanFrame.layoutMode = "HORIZONTAL";
-            spanFrame.primaryAxisSizingMode = "AUTO";
-            spanFrame.counterAxisSizingMode = "AUTO";
-            spanFrame.primaryAxisAlignItems = "CENTER";
-            spanFrame.counterAxisAlignItems = "CENTER";
-            if (node.styles) {
-              applyStylesToFrame(spanFrame, node.styles);
+          await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+          const text = figma.createText();
+          text.characters = node.text && node.text.trim() ? node.text.trim() : " ";
+          text.name = node.tagName.toUpperCase() + " Text";
+          if (node.tagName.startsWith("h")) {
+            const level = parseInt(node.tagName.charAt(1));
+            const headingSizes = { 1: 36, 2: 28, 3: 22, 4: 20, 5: 18, 6: 16 };
+            text.fontSize = headingSizes[level] || 16;
+          } else if (node.tagName === "p") {
+            text.fontSize = 16;
+          }
+          if (node.tagName === "a") {
+            text.fills = [{ type: "SOLID", color: { r: 0.2, g: 0.5, b: 1 } }];
+          }
+          if (node.tagName === "strong" || node.tagName === "b") {
+            try {
+              await figma.loadFontAsync({ family: "Inter", style: "Bold" });
+              text.fontName = { family: "Inter", style: "Bold" };
+            } catch (e) {
             }
-            await figma.loadFontAsync({ family: "Inter", style: "Regular" });
-            const text = figma.createText();
-            text.characters = node.text || "Badge text";
-            text.name = "BADGE Text";
-            if (node.styles) {
-              applyStylesToText(text, node.styles);
+          }
+          if (node.tagName === "em" || node.tagName === "i" || node.tagName === "cite") {
+            try {
+              await figma.loadFontAsync({ family: "Inter", style: "Italic" });
+              text.fontName = { family: "Inter", style: "Italic" };
+            } catch (e) {
             }
-            spanFrame.appendChild(text);
-            if (!parentFrame) {
-              spanFrame.x = startX;
-              spanFrame.y = startY;
-              figma.currentPage.appendChild(spanFrame);
-            } else {
-              parentFrame.appendChild(spanFrame);
+          }
+          if (node.tagName === "code") {
+            try {
+              await figma.loadFontAsync({ family: "Roboto Mono", style: "Regular" });
+              text.fontName = { family: "Roboto Mono", style: "Regular" };
+            } catch (e) {
             }
+          }
+          if (node.tagName === "small") {
+            text.fontSize = Math.max(10, text.fontSize * 0.85);
+          }
+          if (node.tagName === "del" || node.tagName === "s") {
+            text.textDecoration = "STRIKETHROUGH";
+          }
+          if (node.tagName === "ins" || node.tagName === "u") {
+            text.textDecoration = "UNDERLINE";
+          }
+          if (node.styles) {
+            applyStylesToText(text, node.styles);
+          }
+          if (parentFrame && parentFrame.getPluginData("textAlign") === "center") {
+            if (!((_Nc = node.styles) == null ? void 0 : _Nc["text-align"])) {
+              text.textAlignHorizontal = "CENTER";
+            }
+          }
+          if ((_Pc = (_Oc = node.styles) == null ? void 0 : _Oc.className) == null ? void 0 : _Pc.includes("detail")) {
+          }
+          if (!parentFrame) {
+            text.x = startX;
+            text.y = startY;
+            figma.currentPage.appendChild(text);
           } else {
-            await figma.loadFontAsync({ family: "Inter", style: "Regular" });
-            const text = figma.createText();
-            text.characters = node.text || "Empty text";
-            text.name = node.tagName.toUpperCase() + " Text";
-            if (node.tagName.startsWith("h")) {
-              const level = parseInt(node.tagName.charAt(1));
-              const headingSizes = { 1: 36, 2: 28, 3: 22, 4: 20, 5: 18, 6: 16 };
-              text.fontSize = headingSizes[level] || 16;
-            } else if (node.tagName === "p") {
-              text.fontSize = 16;
-            }
-            if (node.tagName === "a") {
-              text.fills = [{ type: "SOLID", color: { r: 0.2, g: 0.5, b: 1 } }];
-            }
-            if (node.tagName === "strong" || node.tagName === "b") {
-              try {
-                await figma.loadFontAsync({ family: "Inter", style: "Bold" });
-                text.fontName = { family: "Inter", style: "Bold" };
-              } catch (e) {
-              }
-            }
-            if (node.tagName === "em" || node.tagName === "i" || node.tagName === "cite") {
-              try {
-                await figma.loadFontAsync({ family: "Inter", style: "Italic" });
-                text.fontName = { family: "Inter", style: "Italic" };
-              } catch (e) {
-              }
-            }
-            if (node.tagName === "code") {
-              try {
-                await figma.loadFontAsync({ family: "Roboto Mono", style: "Regular" });
-                text.fontName = { family: "Roboto Mono", style: "Regular" };
-              } catch (e) {
-              }
-            }
-            if (node.tagName === "small") {
-              text.fontSize = Math.max(10, text.fontSize * 0.85);
-            }
-            if (node.tagName === "del" || node.tagName === "s") {
-              text.textDecoration = "STRIKETHROUGH";
-            }
-            if (node.tagName === "ins" || node.tagName === "u") {
-              text.textDecoration = "UNDERLINE";
-            }
-            if (node.styles) {
-              applyStylesToText(text, node.styles);
-            }
-            if (parentFrame && parentFrame.getPluginData("textAlign") === "center") {
-              if (!((_Nc = node.styles) == null ? void 0 : _Nc["text-align"])) {
-                text.textAlignHorizontal = "CENTER";
-              }
-            }
-            if ((_Pc = (_Oc = node.styles) == null ? void 0 : _Oc.className) == null ? void 0 : _Pc.includes("detail")) {
-            }
-            if (!parentFrame) {
-              text.x = startX;
-              text.y = startY;
-              figma.currentPage.appendChild(text);
-            } else {
-              parentFrame.appendChild(text);
-              const parentHasAutoLayout = parentFrame.layoutMode === "HORIZONTAL" || parentFrame.layoutMode === "VERTICAL";
-              const hasConstrainedWidth = (inheritedStyles == null ? void 0 : inheritedStyles["_hasConstrainedWidth"]) === true;
-              if (parentHasAutoLayout) {
-                if (hasConstrainedWidth) {
-                  text.layoutSizingHorizontal = "FILL";
-                  text.textAutoResize = "HEIGHT";
-                } else {
-                  text.textAutoResize = "WIDTH_AND_HEIGHT";
-                }
+            parentFrame.appendChild(text);
+            const parentHasAutoLayout = parentFrame.layoutMode === "HORIZONTAL" || parentFrame.layoutMode === "VERTICAL";
+            const hasConstrainedWidth = (inheritedStyles == null ? void 0 : inheritedStyles["_hasConstrainedWidth"]) === true;
+            if (parentHasAutoLayout) {
+              if (hasConstrainedWidth) {
+                text.layoutSizingHorizontal = "FILL";
+                text.textAutoResize = "HEIGHT";
               } else {
                 text.textAutoResize = "WIDTH_AND_HEIGHT";
               }
+            } else {
+              text.textAutoResize = "WIDTH_AND_HEIGHT";
             }
           }
         } else if (node.children && node.children.length > 0) {

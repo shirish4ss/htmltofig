@@ -382,26 +382,26 @@ function applyStylesToFrame(frame: FrameNode, styles: any) {
         }
       }
     }
-  } else if ((styles['background-color'] && styles['background-color'] !== 'transparent' && styles['background-color'] !== 'rgba(0, 0, 0, 0)') ||
-             (styles['background'] && !styles['background'].includes('gradient') && styles['background'] !== 'transparent' && styles['background'] !== 'rgba(0, 0, 0, 0)')) {
-    // Handle both background-color and background (shorthand) properties
+  } else if (styles['background-color'] || styles['background']) {
     const bgColorValue = styles['background-color'] || styles['background'];
 
-    // Use hexToRgba to preserve alpha/opacity for semi-transparent backgrounds
-    const bgColorWithAlpha = hexToRgba(bgColorValue);
-
-    if (bgColorWithAlpha && bgColorWithAlpha.a > 0) {
-      // Use RGBA format to preserve opacity
-      frame.fills = [{
-        type: 'SOLID',
-        color: { r: bgColorWithAlpha.r, g: bgColorWithAlpha.g, b: bgColorWithAlpha.b },
-        opacity: bgColorWithAlpha.a
-      }];
-    } else {
+    // Skip if clearly transparent
+    if (bgColorValue === 'transparent' || bgColorValue === 'rgba(0, 0, 0, 0)' || bgColorValue === 'none') {
       frame.fills = [];
+    } else {
+      const bgColorWithAlpha = hexToRgba(bgColorValue);
+      if (bgColorWithAlpha && bgColorWithAlpha.a > 0) {
+        frame.fills = [{
+          type: 'SOLID',
+          color: { r: bgColorWithAlpha.r, g: bgColorWithAlpha.g, b: bgColorWithAlpha.b },
+          opacity: bgColorWithAlpha.a
+        }];
+      } else {
+        frame.fills = [];
+      }
     }
-  } else if (!hasExplicitBackground || styles['background-color'] === 'transparent' || styles['background-color'] === 'rgba(0, 0, 0, 0)') {
-    // FIXED: Explicitly set empty fills for elements without background CSS
+  } else {
+    // No explicit background style
     frame.fills = [];
   }
 
@@ -612,47 +612,34 @@ function applyStylesToFrame(frame: FrameNode, styles: any) {
     }
   });
 
-  // Gap CSS - aplicar solo si es válido
-  if (styles.gap) {
-    const gapValue = parseSize(styles.gap);
-    if (gapValue && gapValue > 0) {
-      frame.itemSpacing = gapValue;
+  // Gap CSS - apply if valid
+  const gapValue = parseSize(styles.gap || styles['column-gap'] || styles['row-gap']);
+  if (gapValue !== null && gapValue >= 0) {
+    frame.itemSpacing = gapValue;
+  }
+
+  // Flexbox/Grid alignment
+  const justifyContent = styles['justify-content'];
+  const alignItems = styles['align-items'];
+
+  if (justifyContent) {
+    switch (justifyContent) {
+      case 'center': frame.primaryAxisAlignItems = 'CENTER'; break;
+      case 'space-between': frame.primaryAxisAlignItems = 'SPACE_BETWEEN'; break;
+      case 'space-around': case 'space-evenly': frame.primaryAxisAlignItems = 'SPACE_BETWEEN'; break;
+      case 'flex-start': case 'start': frame.primaryAxisAlignItems = 'MIN'; break;
+      case 'flex-end': case 'end': frame.primaryAxisAlignItems = 'MAX'; break;
     }
   }
 
-  // Flexbox alignment - FIXED
-  if (styles['justify-content'] === 'center') {
-    frame.primaryAxisAlignItems = 'CENTER';
-
-  } else if (styles['justify-content'] === 'space-between') {
-    frame.primaryAxisAlignItems = 'SPACE_BETWEEN';
-    // SMART: Solo si frame actual es muy pequeño para space-between
-    if (frame.layoutMode === 'HORIZONTAL' && !styles.width && frame.width < 200) {
-      frame.minWidth = Math.max(frame.width * 1.5, 200); // Dinámico basado en contenido
+  if (alignItems) {
+    switch (alignItems) {
+      case 'center': frame.counterAxisAlignItems = 'CENTER'; break;
+      case 'flex-start': case 'start': frame.counterAxisAlignItems = 'MIN'; break;
+      case 'flex-end': case 'end': frame.counterAxisAlignItems = 'MAX'; break;
+      case 'baseline': frame.counterAxisAlignItems = 'BASELINE'; break;
+      case 'stretch': frame.counterAxisAlignItems = 'CENTER'; break; // Figma doesn't have counter-axis stretch in the same way
     }
-  } else if (styles['justify-content'] === 'space-around') {
-    frame.primaryAxisAlignItems = 'SPACE_BETWEEN'; // Fallback
-    // SMART: También para space-around
-    if (frame.layoutMode === 'HORIZONTAL' && !styles.width && frame.width < 200) {
-      frame.minWidth = Math.max(frame.width * 1.5, 200);
-    }
-  } else if (styles['justify-content'] === 'flex-start') {
-    frame.primaryAxisAlignItems = 'MIN';
-  } else if (styles['justify-content'] === 'flex-end') {
-    frame.primaryAxisAlignItems = 'MAX';
-  } else if (styles['justify-content'] === 'space-evenly') {
-    // Figma doesn't have SPACE_EVENLY, use SPACE_BETWEEN as closest approximation
-    frame.primaryAxisAlignItems = 'SPACE_BETWEEN';
-  }
-
-  if (styles['align-items'] === 'center') {
-    frame.counterAxisAlignItems = 'CENTER';
-  } else if (styles['align-items'] === 'flex-start' || styles['align-items'] === 'start') {
-    frame.counterAxisAlignItems = 'MIN';
-  } else if (styles['align-items'] === 'flex-end' || styles['align-items'] === 'end') {
-    frame.counterAxisAlignItems = 'MAX';
-  } else if (styles['align-items'] === 'baseline') {
-    frame.counterAxisAlignItems = 'BASELINE';
   }
 
   // Overflow: hidden - clip content
@@ -2784,64 +2771,66 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
 
       } else if (['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'a', 'label', 'strong', 'b', 'em', 'i', 'code', 'small', 'mark', 'del', 'ins', 'sub', 'sup', 'cite', 'q', 'abbr', 'time'].includes(node.tagName)) {
 
-        // FIX: If text element has children but no direct text, process children instead
-        const hasNoDirectText = !node.text || !node.text.trim();
-        const hasChildren = node.children && node.children.length > 0;
-
-        if (hasNoDirectText && hasChildren) {
-          // Process children instead of creating empty text
-          await createFigmaNodesFromStructure(node.children, parentFrame, startX, startY, inheritedStyles);
-          continue; // Skip the rest of this element's processing
-        }
-
-        // Special handling for span elements with backgrounds (like badges)
+        // Special handling for elements with backgrounds or mixed content
         const hasBackground = node.styles?.['background'] || node.styles?.['background-color'];
-        const isSpanWithBackground = node.tagName === 'span' && hasBackground && hasBackground !== 'transparent';
+        const isBadge = (node.tagName === 'span' || node.tagName === 'a' || node.tagName === 'label') &&
+                        hasBackground && hasBackground !== 'transparent' && hasBackground !== 'rgba(0, 0, 0, 0)';
+        const hasMixedContent = node.mixedContent && node.mixedContent.length > 0;
 
-        if (isSpanWithBackground) {
-          // Create span with background as FrameNode (like a badge)
-          const spanFrame = figma.createFrame();
-          spanFrame.name = 'BADGE Frame';
-          spanFrame.layoutMode = 'HORIZONTAL';
-          spanFrame.primaryAxisSizingMode = 'AUTO';
-          spanFrame.counterAxisSizingMode = 'AUTO';
-          spanFrame.primaryAxisAlignItems = 'CENTER';
-          spanFrame.counterAxisAlignItems = 'CENTER';
+        if (isBadge || hasMixedContent) {
+          // Create as a FrameNode to support background or nested elements
+          const frame = figma.createFrame();
+          frame.name = node.tagName.toUpperCase() + (isBadge ? ' Badge' : ' Frame');
 
-          // Apply background and other frame styles
+          // Default to horizontal for inline-like text tags
+          frame.layoutMode = 'HORIZONTAL';
+          frame.primaryAxisSizingMode = 'AUTO';
+          frame.counterAxisSizingMode = 'AUTO';
+          frame.primaryAxisAlignItems = 'CENTER';
+          frame.counterAxisAlignItems = 'CENTER';
+          frame.itemSpacing = 4; // Tight spacing for text elements
+
+          // Apply styles
           if (node.styles) {
-
-            applyStylesToFrame(spanFrame, node.styles);
-
+            applyStylesToFrame(frame, node.styles);
           }
-
-          // Create text inside the frame
-          await figma.loadFontAsync({ family: "Inter", style: "Regular" });
-          const text = figma.createText();
-          text.characters = node.text || 'Badge text';
-          text.name = 'BADGE Text';
-
-          // Apply text styles
-          if (node.styles) {
-            applyStylesToText(text, node.styles);
-          }
-
-          spanFrame.appendChild(text);
 
           if (!parentFrame) {
-            spanFrame.x = startX;
-            spanFrame.y = startY;
-            figma.currentPage.appendChild(spanFrame);
+            frame.x = startX; frame.y = startY;
+            figma.currentPage.appendChild(frame);
           } else {
-            parentFrame.appendChild(spanFrame);
+            parentFrame.appendChild(frame);
           }
 
-        } else {
-          // Regular text handling for other elements and spans without backgrounds
-          await figma.loadFontAsync({ family: "Inter", style: "Regular" });
-          const text = figma.createText();
-          text.characters = node.text || 'Empty text';
-          text.name = node.tagName.toUpperCase() + ' Text';
+          // Process mixed content or children
+          if (hasMixedContent) {
+            await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+            for (const item of node.mixedContent) {
+              if (item.type === 'text' && item.text && item.text.trim()) {
+                const tNode = figma.createText();
+                tNode.characters = item.text.trim();
+                applyStylesToText(tNode, node.styles);
+                frame.appendChild(tNode);
+              } else if (item.type === 'element' && item.node) {
+                await createFigmaNodesFromStructure([item.node], frame, 0, 0, node.styles);
+              }
+            }
+          } else if (node.text && node.text.trim()) {
+            await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+            const tNode = figma.createText();
+            tNode.characters = node.text.trim();
+            applyStylesToText(tNode, node.styles);
+            frame.appendChild(tNode);
+          }
+
+          continue;
+        }
+
+        // Regular text handling for simple text tags
+        await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+        const text = figma.createText();
+        text.characters = node.text && node.text.trim() ? node.text.trim() : ' ';
+        text.name = node.tagName.toUpperCase() + ' Text';
 
         // Default sizes for headings con mejor legibilidad
         if (node.tagName.startsWith('h')) {
@@ -2944,7 +2933,6 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
           } else {
             text.textAutoResize = 'WIDTH_AND_HEIGHT';
           }
-        }
         }
 
       } else if (node.children && node.children.length > 0) {

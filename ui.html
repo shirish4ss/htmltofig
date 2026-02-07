@@ -622,11 +622,15 @@ async function nodeToStruct(node) {
 
     for (const child of node.childNodes) {
       if (child.nodeType === 3) { // Text node
-        const textContent = child.textContent.trim();
-        if (textContent) {
+        const textContent = child.textContent;
+        // Only add if it contains non-whitespace or is a meaningful space between elements
+        if (textContent && (textContent.trim() || (textContent.length > 0 && mixedContent.length > 0))) {
           mixedContent.push({ type: 'text', text: textContent });
         }
       } else if (child.nodeType === 1) { // Element node
+        // Skip hidden elements
+        if (window.getComputedStyle(child).display === 'none') continue;
+
         const childStruct = await nodeToStruct(child);
         if (childStruct) {
           children.push(childStruct);
@@ -635,10 +639,17 @@ async function nodeToStruct(node) {
       }
     }
 
+    // Get direct text content (excluding children's text) for more accurate representation
+    const directText = Array.from(node.childNodes)
+      .filter(n => n.nodeType === 3)
+      .map(n => n.textContent)
+      .join('')
+      .trim();
+
     const struct = {
       type: 'element',
       tagName: tag,
-      text: node.innerText.trim(),
+      text: directText || node.innerText.trim(), // Fallback to innerText if no direct text
       styles: styles,
       attributes: {
         value: node.value,
