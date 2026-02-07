@@ -1573,6 +1573,49 @@ async function createGridLayoutFallback(children: any[], parentFrame: FrameNode,
   }
 }
 
+async function createPseudoElement(pseudoData: any, parent: FrameNode) {
+  if (!pseudoData || (!pseudoData.content && !pseudoData['background-color'] && !pseudoData['background-image'])) return null;
+
+  const frame = figma.createFrame();
+  frame.name = 'pseudo';
+  frame.fills = [];
+
+  // Apply styles
+  applyStylesToFrame(frame, pseudoData);
+
+  // Add to parent
+  parent.appendChild(frame);
+
+  // Handle content text
+  if (pseudoData.content && pseudoData.content !== 'none' && pseudoData.content !== 'normal' && pseudoData.content !== '""') {
+    await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+    const text = figma.createText();
+    text.characters = pseudoData.content;
+    applyStylesToText(text, pseudoData);
+    frame.appendChild(text);
+
+    if (pseudoData.width && pseudoData.height) {
+      text.layoutSizingHorizontal = 'FILL';
+      text.layoutSizingVertical = 'FILL';
+    } else {
+      text.textAutoResize = 'WIDTH_AND_HEIGHT';
+    }
+  }
+
+  // Handle absolute positioning if specified
+  if (pseudoData.position === 'absolute') {
+    try {
+      frame.layoutPositioning = 'ABSOLUTE';
+      const top = parseSize(pseudoData.top);
+      const left = parseSize(pseudoData.left);
+      if (top !== null) frame.y = top;
+      if (left !== null) frame.x = left;
+    } catch (e) {}
+  }
+
+  return frame;
+}
+
 async function createFigmaNodesFromStructure(structure: any[], parentFrame?: FrameNode, startX = 0, startY = 0, inheritedStyles?: any) {
   debugLog('[NODE CREATION] Starting createFigmaNodesFromStructure');
   debugLog('[NODE CREATION] Structure:', structure);
@@ -1647,13 +1690,12 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
         } else if (display.includes('inline') || ['span', 'a', 'strong', 'b', 'em', 'i', 'code', 'small', 'label'].includes(node.tagName)) {
           layoutMode = 'HORIZONTAL';
         } else {
-          // Heuristic: if all children are inline tags, use HORIZONTAL with WRAP
+          // Heuristic: if all children are inline tags, use HORIZONTAL
           const inlineTags = ['span', 'a', 'strong', 'b', 'em', 'i', 'code', 'small', 'label', 'img', 'button', 'input', 'select'];
           const children = node.children || [];
           const allInline = children.length > 0 && children.every((c: any) => inlineTags.includes(c.tagName));
           if (allInline) {
             layoutMode = 'HORIZONTAL';
-            frame.layoutWrap = 'WRAP';
           }
         }
 
@@ -1674,14 +1716,18 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
           }
         }
 
+        // CRITICAL: Set layoutMode BEFORE setting layoutWrap
         frame.layoutMode = layoutMode;
 
         // FIXED: Support flex-wrap
-        if (node.styles?.['flex-wrap'] === 'wrap' || node.styles?.['flex-wrap'] === 'wrap-reverse') {
-          frame.layoutWrap = 'WRAP';
-        } else if (layoutMode === 'HORIZONTAL' && !isFlexOrGrid) {
-          // Default to wrap for non-flex horizontal layouts (standard inline flow)
-          frame.layoutWrap = 'WRAP';
+        // Figma only supports WRAP on HORIZONTAL layout
+        if (frame.layoutMode === 'HORIZONTAL') {
+          if (node.styles?.['flex-wrap'] === 'wrap' || node.styles?.['flex-wrap'] === 'wrap-reverse') {
+            frame.layoutWrap = 'WRAP';
+          } else if (!isFlexOrGrid) {
+            // Default to wrap for non-flex horizontal layouts (standard inline flow)
+            frame.layoutWrap = 'WRAP';
+          }
         }
 
         // Set basic properties - AUTO para que se ajuste al contenido
@@ -2059,6 +2105,11 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
         const justifyContent = node.styles?.['justify-content'];
         const alignItems = node.styles?.['align-items'];
 
+        // Render pseudo-before
+        if (node.pseudoBefore) {
+          await createPseudoElement(node.pseudoBefore, frame);
+        }
+
         const inheritableStyles = {
           ...inheritedStyles,
           // CRITICAL: Propagate width constraint - but not through horizontal flex containers
@@ -2230,6 +2281,11 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
             // FIXED: Reorder children by z-index after all children are created
             reorderChildrenByZIndex(frame);
           }
+        }
+
+        // Render pseudo-after
+        if (node.pseudoAfter) {
+          await createPseudoElement(node.pseudoAfter, frame);
         }
         
         // FIXED: Store z-index for later reordering
@@ -2597,6 +2653,37 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
           figma.currentPage.appendChild(frame);
         } else {
           parentFrame.appendChild(frame);
+        }
+
+      } else if (node.tagName === 'svg') {
+        try {
+          const svgNode = figma.createNodeFromSvg(node.svgContent);
+          const width = parseSize(node.styles?.width) || svgNode.width;
+          const height = parseSize(node.styles?.height) || svgNode.height;
+
+          svgNode.resize(width, height);
+          svgNode.name = 'SVG Image';
+
+          if (!parentFrame) {
+            svgNode.x = startX;
+            svgNode.y = startY;
+            figma.currentPage.appendChild(svgNode);
+          } else {
+            parentFrame.appendChild(svgNode);
+          }
+
+          // Apply basic styles like opacity if possible
+          if (node.styles?.opacity) svgNode.opacity = parseFloat(node.styles.opacity);
+
+        } catch (error) {
+          console.error('Error creating SVG:', error);
+          // Fallback to a placeholder frame if SVG creation fails
+          const frame = figma.createFrame();
+          frame.name = 'SVG Placeholder';
+          frame.resize(100, 100);
+          frame.fills = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }];
+          if (parentFrame) parentFrame.appendChild(frame);
+          else figma.currentPage.appendChild(frame);
         }
 
       } else if (node.tagName === 'img') {

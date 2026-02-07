@@ -548,6 +548,39 @@ function getElementStyles(element) {
   return styles;
 }
 
+function getPseudoStyles(element, pseudo) {
+  const computed = window.getComputedStyle(element, pseudo);
+  const content = computed.getPropertyValue('content');
+
+  if (!content || content === 'none' || content === 'normal') {
+    return null;
+  }
+
+  const styles = {};
+  const props = [
+    'display', 'width', 'height', 'background-color', 'background-image',
+    'color', 'font-family', 'font-size', 'font-weight',
+    'position', 'top', 'right', 'bottom', 'left',
+    'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+    'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+    'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+    'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+    'border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius',
+    'opacity', 'box-shadow', 'content', 'transform'
+  ];
+
+  for (const prop of props) {
+    styles[prop] = computed.getPropertyValue(prop);
+  }
+
+  // Strip quotes from content
+  if (styles['content']) {
+    styles['content'] = styles['content'].replace(/^['"](.*)['"]$/, '$1');
+  }
+
+  return styles;
+}
+
 async function simpleParseHTML(htmlStr, additionalCss) {
   const container = document.getElementById('computed-style-container');
 
@@ -654,7 +687,27 @@ async function simpleParseHTML(htmlStr, additionalCss) {
 async function nodeToStruct(node) {
   if (node.nodeType === 1) { // Element node
     const tag = node.tagName.toLowerCase();
+
+    // NEW: Special handling for SVG to maintain fidelity
+    if (tag === 'svg') {
+      return {
+        type: 'element',
+        tagName: 'svg',
+        svgContent: node.outerHTML,
+        styles: getElementStyles(node),
+        attributes: {
+          width: node.getAttribute('width'),
+          height: node.getAttribute('height'),
+          alt: node.getAttribute('alt') || 'SVG Image'
+        }
+      };
+    }
+
     const styles = getElementStyles(node);
+
+    // NEW: Capture pseudo-elements
+    const pseudoBefore = getPseudoStyles(node, ':before');
+    const pseudoAfter = getPseudoStyles(node, ':after');
 
     // Check for background image URL in styles
     let bgImageUrl = null;
@@ -697,6 +750,8 @@ async function nodeToStruct(node) {
       tagName: tag,
       text: directText || node.innerText.trim(), // Fallback to innerText if no direct text
       styles: styles,
+      pseudoBefore: pseudoBefore,
+      pseudoAfter: pseudoAfter,
       attributes: {
         value: node.value,
         placeholder: node.getAttribute('placeholder'),
