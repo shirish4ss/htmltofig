@@ -2261,17 +2261,46 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
                 const numCols = getGridColCount(gridTemplateAreas);
                 await createGridLayoutWithAreas(node.children, frame, areaMap, numRows, numCols, gap, inheritableStyles);
               } else {
-                // Check if children have grid-column/grid-row spans
+                // HIGH-FIDELITY: Prefer Flexbox + Wrap for simple grids
+                // This refactors CSS Grid to Figma's native Auto-Layout Wrap mode
                 const columns = parseGridColumns(gridTemplateColumns);
                 const finalColumns = columns > 0 ? columns : 2;
 
-                if (hasGridSpans(node.children)) {
-                  // Use bento grid layout with span support
-                  // Debug log removed
-                  await createGridLayoutWithSpans(node.children, frame, finalColumns, gap, inheritableStyles, gridTemplateColumns);
+                if (!hasGridSpans(node.children)) {
+                  frame.layoutMode = 'HORIZONTAL';
+                  frame.layoutWrap = 'WRAP';
+                  frame.itemSpacing = gap;
+                  try {
+                    // Set counter axis spacing (row gap)
+                    (frame as any).counterAxisSpacing = gap;
+                  } catch(e) {}
+
+                  // Calculate child width based on columns
+                  const parentWidth = frame.width || 1200;
+                  const availableWidth = parentWidth - (frame.paddingLeft || 0) - (frame.paddingRight || 0);
+                  const totalGapWidth = (finalColumns - 1) * gap;
+                  const childWidth = Math.max(1, Math.floor((availableWidth - totalGapWidth) / finalColumns));
+
+                  const gridInheritedStyles = {
+                    ...inheritableStyles,
+                    '_hasConstrainedWidth': true,
+                    '_gridItemWidth': childWidth
+                  };
+
+                  await createFigmaNodesFromStructure(node.children, frame, 0, 0, gridInheritedStyles);
+
+                  // Apply fixed width to children to maintain grid appearance
+                  for (const child of frame.children) {
+                    if ('layoutSizingHorizontal' in child) {
+                      try {
+                        (child as any).layoutSizingHorizontal = 'FIXED';
+                        (child as any).resize(childWidth, child.height);
+                      } catch(e) {}
+                    }
+                  }
                 } else {
-                  // Simple grid layout without spans
-                  await createGridLayout(node.children, frame, finalColumns, gap, inheritableStyles, gridTemplateColumns);
+                  // Bento grid layout with span support
+                  await createGridLayoutWithSpans(node.children, frame, finalColumns, gap, inheritableStyles, gridTemplateColumns);
                 }
               }
             } else {

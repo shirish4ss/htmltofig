@@ -539,7 +539,8 @@ function getElementStyles(element) {
   }
 
   // Add class and id for layout analysis in code.ts
-  styles['class'] = element.className || '';
+  // FIX: SVG element.className is an object (SVGAnimatedString), which breaks postMessage
+  styles['class'] = (typeof element.className === 'string') ? element.className : (element.getAttribute('class') || '');
   styles['id'] = element.id || '';
 
   // Special handling for shorthand background which might contain gradients
@@ -745,10 +746,27 @@ async function nodeToStruct(node) {
       .join('')
       .trim();
 
+    // NEW: Convert background-image containers to img tags for better Figma fidelity
+    // only if they have no complex children or if they are purely for display
+    if (bgImageUrl && children.length === 0 && tag !== 'button' && tag !== 'input') {
+      return {
+        type: 'element',
+        tagName: 'img',
+        styles: styles,
+        attributes: {
+          src: bgImageUrl,
+          alt: 'Background Image'
+        },
+        children: [],
+        mixedContent: null,
+        imageData: null
+      };
+    }
+
     const struct = {
       type: 'element',
       tagName: tag,
-      text: directText || node.innerText.trim(), // Fallback to innerText if no direct text
+      text: directText || (node.childNodes.length === 0 ? "" : node.innerText.trim()),
       styles: styles,
       pseudoBefore: pseudoBefore,
       pseudoAfter: pseudoAfter,

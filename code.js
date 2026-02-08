@@ -1704,50 +1704,6 @@
       }
     }
   }
-  async function createGridLayout(children, parentFrame, columns, gap, inheritedStyles, gridTemplateColumns) {
-    if (!children || children.length === 0) {
-      return;
-    }
-    await createGridLayoutFallback(children, parentFrame, columns, gap, inheritedStyles, gridTemplateColumns);
-  }
-  async function createGridLayoutFallback(children, parentFrame, columns, gap, inheritedStyles, gridTemplateColumns) {
-    parentFrame.layoutMode = "VERTICAL";
-    parentFrame.itemSpacing = gap;
-    const parentWidth = Math.max(100, parentFrame.width || 1200);
-    const paddingH = (parentFrame.paddingLeft || 0) + (parentFrame.paddingRight || 0);
-    const availableWidth = Math.max(100, parentWidth - paddingH);
-    const columnWidths = parseGridColumnWidths(gridTemplateColumns, availableWidth, gap);
-    for (let i = 0; i < children.length; i += columns) {
-      const rowFrame = figma.createFrame();
-      rowFrame.name = `Grid Row`;
-      rowFrame.fills = [];
-      rowFrame.layoutMode = "HORIZONTAL";
-      rowFrame.primaryAxisSizingMode = "AUTO";
-      rowFrame.counterAxisSizingMode = "AUTO";
-      rowFrame.itemSpacing = gap;
-      parentFrame.appendChild(rowFrame);
-      try {
-        rowFrame.layoutSizingHorizontal = "FILL";
-      } catch (e) {
-      }
-      for (let j = 0; j < columns; j++) {
-        if (children[i + j]) {
-          const gridInheritedStyles = __spreadProps(__spreadValues({}, inheritedStyles), { "_hasConstrainedWidth": true });
-          await createFigmaNodesFromStructure([children[i + j]], rowFrame, 0, 0, gridInheritedStyles);
-        }
-      }
-      for (let k = 0; k < rowFrame.children.length; k++) {
-        try {
-          const child = rowFrame.children[k];
-          const colIndex = k % columns;
-          const targetWidth = columnWidths[colIndex] || 100;
-          child.layoutSizingHorizontal = "FIXED";
-          child.resize(targetWidth, child.height);
-        } catch (e) {
-        }
-      }
-    }
-  }
   async function createPseudoElement(pseudoData, parent) {
     if (!pseudoData || !pseudoData.content && !pseudoData["background-color"] && !pseudoData["background-image"]) return null;
     const frame = figma.createFrame();
@@ -2225,10 +2181,34 @@
                 } else {
                   const columns = parseGridColumns(gridTemplateColumns);
                   const finalColumns = columns > 0 ? columns : 2;
-                  if (hasGridSpans(node.children)) {
-                    await createGridLayoutWithSpans(node.children, frame, finalColumns, gap2, inheritableStyles, gridTemplateColumns);
+                  if (!hasGridSpans(node.children)) {
+                    frame.layoutMode = "HORIZONTAL";
+                    frame.layoutWrap = "WRAP";
+                    frame.itemSpacing = gap2;
+                    try {
+                      frame.counterAxisSpacing = gap2;
+                    } catch (e) {
+                    }
+                    const parentWidth = frame.width || 1200;
+                    const availableWidth = parentWidth - (frame.paddingLeft || 0) - (frame.paddingRight || 0);
+                    const totalGapWidth = (finalColumns - 1) * gap2;
+                    const childWidth = Math.max(1, Math.floor((availableWidth - totalGapWidth) / finalColumns));
+                    const gridInheritedStyles = __spreadProps(__spreadValues({}, inheritableStyles), {
+                      "_hasConstrainedWidth": true,
+                      "_gridItemWidth": childWidth
+                    });
+                    await createFigmaNodesFromStructure(node.children, frame, 0, 0, gridInheritedStyles);
+                    for (const child of frame.children) {
+                      if ("layoutSizingHorizontal" in child) {
+                        try {
+                          child.layoutSizingHorizontal = "FIXED";
+                          child.resize(childWidth, child.height);
+                        } catch (e) {
+                        }
+                      }
+                    }
                   } else {
-                    await createGridLayout(node.children, frame, finalColumns, gap2, inheritableStyles, gridTemplateColumns);
+                    await createGridLayoutWithSpans(node.children, frame, finalColumns, gap2, inheritableStyles, gridTemplateColumns);
                   }
                 }
               } else {
