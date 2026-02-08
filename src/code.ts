@@ -1673,7 +1673,7 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
 
       // Elementos que siempre son frames + cualquier elemento con display:flex/grid/inline-flex
       const isFlexOrGrid = node.styles?.display === 'flex' || node.styles?.display === 'inline-flex' || node.styles?.display === 'grid';
-      const isContainerTag = ['body', 'div', 'section', 'article', 'nav', 'header', 'footer', 'main', 'aside', 'blockquote', 'figure', 'figcaption', 'address', 'details', 'summary', 'a', 'li', 'ul', 'ol', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(node.tagName);
+      const isContainerTag = ['body', 'div', 'section', 'article', 'nav', 'header', 'footer', 'main', 'aside', 'blockquote', 'figure', 'figcaption', 'address', 'details', 'summary', 'a'].includes(node.tagName);
 
       if (isContainerTag || isFlexOrGrid) {
         const frame = figma.createFrame();
@@ -1682,9 +1682,11 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
         // LAYOUT MODE: Aplicar display CSS directamente PRIMERO
         let layoutMode: 'HORIZONTAL' | 'VERTICAL' = 'VERTICAL';
         const display = node.styles?.display || 'block';
+        const flexDirection = node.styles?.['flex-direction'] || 'row';
+        const isReverse = flexDirection === 'row-reverse' || flexDirection === 'column-reverse';
 
         if (display.includes('flex')) {
-          layoutMode = node.styles?.['flex-direction'] === 'column' ? 'VERTICAL' : 'HORIZONTAL';
+          layoutMode = (flexDirection === 'column' || flexDirection === 'column-reverse') ? 'VERTICAL' : 'HORIZONTAL';
         } else if (display === 'grid') {
           layoutMode = 'VERTICAL';
         } else if (display.includes('inline') || ['span', 'a', 'strong', 'b', 'em', 'i', 'code', 'small', 'label'].includes(node.tagName)) {
@@ -2243,6 +2245,12 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
 
           // Process children if they exist
           if (node.children && node.children.length > 0) {
+            // Handle flex-reverse by reversing children order
+            let childrenToProcess = node.children;
+            if (isReverse) {
+              childrenToProcess = [...node.children].reverse();
+            }
+
             // Manejo de grid genérico
             if (node.styles?.display === 'grid') {
               // Debug log removed
@@ -2287,7 +2295,7 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
                     '_gridItemWidth': childWidth
                   };
 
-                  await createFigmaNodesFromStructure(node.children, frame, 0, 0, gridInheritedStyles);
+                  await createFigmaNodesFromStructure(childrenToProcess, frame, 0, 0, gridInheritedStyles);
 
                   // Apply fixed width to children to maintain grid appearance
                   for (const child of frame.children) {
@@ -2300,11 +2308,11 @@ async function createFigmaNodesFromStructure(structure: any[], parentFrame?: Fra
                   }
                 } else {
                   // Bento grid layout with span support
-                  await createGridLayoutWithSpans(node.children, frame, finalColumns, gap, inheritableStyles, gridTemplateColumns);
+                  await createGridLayoutWithSpans(childrenToProcess, frame, finalColumns, gap, inheritableStyles, gridTemplateColumns);
                 }
               }
             } else {
-              await createFigmaNodesFromStructure(node.children, frame, 0, 0, inheritableStyles);
+              await createFigmaNodesFromStructure(childrenToProcess, frame, 0, 0, inheritableStyles);
             }
 
             // FIXED: Reorder children by z-index after all children are created

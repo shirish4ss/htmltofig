@@ -1774,14 +1774,16 @@
         const nodeStyles = __spreadValues(__spreadValues({}, inheritedStyles), node.styles);
         node.styles = nodeStyles;
         const isFlexOrGrid = ((_g = node.styles) == null ? void 0 : _g.display) === "flex" || ((_h = node.styles) == null ? void 0 : _h.display) === "inline-flex" || ((_i = node.styles) == null ? void 0 : _i.display) === "grid";
-        const isContainerTag = ["body", "div", "section", "article", "nav", "header", "footer", "main", "aside", "blockquote", "figure", "figcaption", "address", "details", "summary", "a", "li", "ul", "ol", "p", "h1", "h2", "h3", "h4", "h5", "h6"].includes(node.tagName);
+        const isContainerTag = ["body", "div", "section", "article", "nav", "header", "footer", "main", "aside", "blockquote", "figure", "figcaption", "address", "details", "summary", "a"].includes(node.tagName);
         if (isContainerTag || isFlexOrGrid) {
           const frame = figma.createFrame();
           frame.name = node.tagName.toUpperCase() + " Frame";
           let layoutMode = "VERTICAL";
           const display = ((_j = node.styles) == null ? void 0 : _j.display) || "block";
+          const flexDirection = ((_k = node.styles) == null ? void 0 : _k["flex-direction"]) || "row";
+          const isReverse = flexDirection === "row-reverse" || flexDirection === "column-reverse";
           if (display.includes("flex")) {
-            layoutMode = ((_k = node.styles) == null ? void 0 : _k["flex-direction"]) === "column" ? "VERTICAL" : "HORIZONTAL";
+            layoutMode = flexDirection === "column" || flexDirection === "column-reverse" ? "VERTICAL" : "HORIZONTAL";
           } else if (display === "grid") {
             layoutMode = "VERTICAL";
           } else if (display.includes("inline") || ["span", "a", "strong", "b", "em", "i", "code", "small", "label"].includes(node.tagName)) {
@@ -2169,6 +2171,10 @@
               }
             }
             if (node.children && node.children.length > 0) {
+              let childrenToProcess = node.children;
+              if (isReverse) {
+                childrenToProcess = [...node.children].reverse();
+              }
               if (((_Qa = node.styles) == null ? void 0 : _Qa.display) === "grid") {
                 const gridTemplateAreas = (_Ra = node.styles) == null ? void 0 : _Ra["grid-template-areas"];
                 const gridTemplateColumns = (_Sa = node.styles) == null ? void 0 : _Sa["grid-template-columns"];
@@ -2197,7 +2203,7 @@
                       "_hasConstrainedWidth": true,
                       "_gridItemWidth": childWidth
                     });
-                    await createFigmaNodesFromStructure(node.children, frame, 0, 0, gridInheritedStyles);
+                    await createFigmaNodesFromStructure(childrenToProcess, frame, 0, 0, gridInheritedStyles);
                     for (const child of frame.children) {
                       if ("layoutSizingHorizontal" in child) {
                         try {
@@ -2208,11 +2214,11 @@
                       }
                     }
                   } else {
-                    await createGridLayoutWithSpans(node.children, frame, finalColumns, gap2, inheritableStyles, gridTemplateColumns);
+                    await createGridLayoutWithSpans(childrenToProcess, frame, finalColumns, gap2, inheritableStyles, gridTemplateColumns);
                   }
                 }
               } else {
-                await createFigmaNodesFromStructure(node.children, frame, 0, 0, inheritableStyles);
+                await createFigmaNodesFromStructure(childrenToProcess, frame, 0, 0, inheritableStyles);
               }
               reorderChildrenByZIndex(frame);
             }

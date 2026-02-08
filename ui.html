@@ -617,6 +617,9 @@ async function simpleParseHTML(htmlStr, additionalCss) {
   // Use the provided window.lastUploadedUrl if we're doing a URL import
   const finalBaseUrl = docBaseUrl || window.lastUploadedUrl || null;
 
+  // Track injected resources to clean up if necessary (optional)
+  const injectedResources = [];
+
   links.forEach(node => {
     const tagName = node.tagName.toLowerCase();
     const clone = document.createElement(tagName);
@@ -646,6 +649,7 @@ async function simpleParseHTML(htmlStr, additionalCss) {
 
     loadPromises.push(promise);
     document.head.appendChild(clone);
+    injectedResources.push(clone);
   });
 
   // Wait for all external resources to load
@@ -680,7 +684,8 @@ async function simpleParseHTML(htmlStr, additionalCss) {
     if (struct) results.push(struct);
   }
 
-  // Clean up
+  // Clean up content but keep styles for now as they are needed for computed styles
+  // during the async nodeToStruct calls. Injected links/scripts stay in head.
   container.innerHTML = '';
   return results;
 }
